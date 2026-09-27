@@ -1,0 +1,135 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="theme-color" content="#0b0f14">
+  <meta name="description" content="Horarios semanales y notas diarias, con editor y lienzo de dibujo.">
+  <link rel="manifest" href="manifest.webmanifest">
+  <link rel="icon" href="icons/icon.svg" type="image/svg+xml">
+  <link rel="stylesheet" href="styles.css">
+  <title>Noti</title>
+</head>
+<body>
+  <div class="app-shell">
+    <header class="topbar">
+      <div>
+        <p class="eyebrow">PLANIFICACIÓN PERSONAL</p>
+        <h1>Horarios <span>&</span> Notas</h1>
+      </div>
+      <button id="installBtn" class="icon-btn" type="button" title="Instalar app" aria-label="Instalar app">⇩</button>
+    </header>
+
+    <main>
+      <section class="day-strip" aria-label="Seleccionar día">
+        <div class="day-group">
+          <span class="group-label">Semana</span>
+          <div id="weekdayButtons" class="day-buttons"></div>
+        </div>
+        <div class="day-group weekend-group">
+          <span class="group-label">Fin de semana</span>
+          <div id="weekendButtons" class="day-buttons"></div>
+        </div>
+      </section>
+
+      <section class="day-heading card">
+        <div>
+          <span class="muted">HOJA DEL DÍA</span>
+          <h2 id="dayTitle">Lunes</h2>
+          <p id="daySubtitle">Horario universitario, pendientes y notas.</p>
+        </div>
+        <button id="editScheduleBtn" class="secondary-btn" type="button">Editar horario</button>
+      </section>
+
+      <section id="scheduleSection" class="card">
+        <div class="section-head">
+          <div>
+            <span class="muted">HORARIO</span>
+            <h3>Asignaturas y actividades</h3>
+          </div>
+          <span id="scheduleCount" class="pill">0 bloques</span>
+        </div>
+        <div id="scheduleList" class="schedule-list"></div>
+      </section>
+
+      <section class="workspace-grid">
+        <article class="card editor-card">
+          <div class="section-head">
+            <div>
+              <span class="muted">NOTAS</span>
+              <h3>Apuntes del día</h3>
+            </div>
+            <span id="saveStatus" class="save-status">Guardado</span>
+          </div>
+
+          <div class="toolbar" role="toolbar" aria-label="Herramientas de texto">
+            <select id="fontSelect" aria-label="Tipografía">
+              <option value="system">Sans-serif</option>
+              <option value="serif">Serif</option>
+              <option value="mono">Monospaced</option>
+            </select>
+            <button class="tool-btn" data-command="bold" type="button"><strong>B</strong></button>
+            <button id="checklistBtn" class="tool-btn" type="button" title="Añadir checklist">☑</button>
+          </div>
+
+          <div id="noteEditor" class="note-editor font-system" contenteditable="true" data-placeholder="Escribe aquí tus apuntes, tareas, ideas o recordatorios..."></div>
+        </article>
+
+        <article class="card drawing-card">
+          <div class="section-head">
+            <div>
+              <span class="muted">LIENZO</span>
+              <h3>Dibujo a mano alzada</h3>
+            </div>
+            <span class="save-status">Local</span>
+          </div>
+
+          <div class="drawing-toolbar">
+            <label class="color-picker" title="Color">
+              <span>Color</span>
+              <input id="brushColor" type="color" value="#e8edf2">
+            </label>
+            <label class="size-control" title="Grosor">
+              <span>Grosor</span>
+              <input id="brushSize" type="range" min="1" max="32" value="5">
+              <output id="brushSizeValue">5</output>
+            </label>
+            <button id="eraserBtn" class="tool-btn" type="button" title="Borrador">⌫</button>
+            <button id="clearCanvasBtn" class="danger-outline" type="button">Limpiar</button>
+          </div>
+
+          <div class="canvas-wrap">
+            <canvas id="drawingCanvas" aria-label="Lienzo para dibujar"></canvas>
+          </div>
+        </article>
+      </section>
+    </main>
+
+    <footer class="footer-note">Tus datos se guardan localmente en este dispositivo.</footer>
+  </div>
+
+  <div id="scheduleModal" class="modal hidden" role="dialog" aria-modal="true" aria-labelledby="modalTitle">
+    <div class="modal-backdrop" data-close-modal="true"></div>
+    <div class="modal-card">
+      <div class="modal-head">
+        <div>
+          <span class="muted">CONFIGURACIÓN</span>
+          <h2 id="modalTitle">Editar horario</h2>
+        </div>
+        <button id="closeModalBtn" class="icon-btn" type="button" aria-label="Cerrar">×</button>
+      </div>
+      <p class="modal-help">Agrega las materias o actividades de este día. Puedes dejar filas vacías.</p>
+      <div id="scheduleRows" class="schedule-form"></div>
+      <button id="addScheduleRowBtn" class="secondary-btn full-btn" type="button">+ Agregar bloque</button>
+      <div class="modal-actions">
+        <button id="cancelScheduleBtn" class="secondary-btn" type="button">Cancelar</button>
+        <button id="saveScheduleBtn" class="primary-btn" type="button">Guardar horario</button>
+      </div>
+    </div>
+  </div>
+
+  <div id="toast" class="toast" role="status" aria-live="polite"></div>
+
+  <script src="app.js"></script>
+</body>
+</html>
