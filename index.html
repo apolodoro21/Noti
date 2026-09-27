@@ -4,20 +4,58 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
   <meta name="theme-color" content="#0b0f14">
-  <meta name="description" content="Horarios semanales y notas diarias, con editor y lienzo de dibujo.">
+  <meta name="description" content="Noti: horarios, notas, pendientes y dibujo sincronizados entre tus dispositivos.">
   <link rel="manifest" href="manifest.webmanifest">
   <link rel="icon" href="icons/icon.svg" type="image/svg+xml">
   <link rel="stylesheet" href="styles.css">
   <title>Noti</title>
 </head>
 <body>
-  <div class="app-shell">
+  <div id="authScreen" class="auth-screen">
+    <div class="auth-card card">
+      <div class="brand-mark">N</div>
+      <p class="eyebrow">TU ORGANIZACIÓN PERSONAL</p>
+      <h1>Noti</h1>
+      <p class="auth-subtitle">Tus días, tus notas y tus pendientes, sincronizados en todos tus dispositivos.</p>
+
+      <div class="auth-tabs" role="tablist" aria-label="Acceso a Noti">
+        <button id="loginTab" class="auth-tab active" type="button">Iniciar sesión</button>
+        <button id="signupTab" class="auth-tab" type="button">Crear cuenta</button>
+      </div>
+
+      <form id="authForm" class="auth-form">
+        <label id="nameField" class="field hidden">
+          <span>Nombre</span>
+          <input id="authName" type="text" autocomplete="name" placeholder="Tu nombre">
+        </label>
+        <label class="field">
+          <span>Correo electrónico</span>
+          <input id="authEmail" type="email" autocomplete="email" placeholder="tucorreo@email.com" required>
+        </label>
+        <label class="field">
+          <span>Contraseña</span>
+          <input id="authPassword" type="password" autocomplete="current-password" placeholder="Mínimo 6 caracteres" minlength="6" required>
+        </label>
+        <button id="authSubmit" class="primary-btn auth-submit" type="submit">Entrar a Noti</button>
+      </form>
+
+      <p id="authMessage" class="auth-message" role="status" aria-live="polite"></p>
+      <p class="auth-note">Tus datos se guardan en tu cuenta de Noti y se sincronizan con Supabase.</p>
+    </div>
+  </div>
+
+  <div id="appScreen" class="app-shell hidden">
     <header class="topbar">
       <div>
-        <p class="eyebrow">PLANIFICACIÓN PERSONAL</p>
-        <h1>Horarios <span>&</span> Notas</h1>
+        <p class="eyebrow">ORGANIZACIÓN PERSONAL</p>
+        <h1>Noti</h1>
+        <p id="welcomeLine" class="welcome-line"></p>
       </div>
-      <button id="installBtn" class="icon-btn" type="button" title="Instalar app" aria-label="Instalar app">⇩</button>
+      <div class="top-actions">
+        <span id="syncStatus" class="sync-badge">Sincronizado</span>
+        <button id="installBtn" class="icon-btn" type="button" title="Instalar app" aria-label="Instalar app">⇩</button>
+        <button id="logoutBtn" class="icon-btn" type="button" title="Cerrar sesión" aria-label="Cerrar sesión">↪</button>
+      </div>
     </header>
 
     <main>
@@ -59,7 +97,7 @@
               <span class="muted">NOTAS</span>
               <h3>Apuntes del día</h3>
             </div>
-            <span id="saveStatus" class="save-status">Guardado</span>
+            <span id="saveStatus" class="save-status">Sin cambios</span>
           </div>
 
           <div class="toolbar" role="toolbar" aria-label="Herramientas de texto">
@@ -81,7 +119,7 @@
               <span class="muted">LIENZO</span>
               <h3>Dibujo a mano alzada</h3>
             </div>
-            <span class="save-status">Local</span>
+            <span id="drawingStatus" class="save-status">Sin cambios</span>
           </div>
 
           <div class="drawing-toolbar">
@@ -105,7 +143,7 @@
       </section>
     </main>
 
-    <footer class="footer-note">Tus datos se guardan localmente en este dispositivo.</footer>
+    <footer class="footer-note">Noti sincroniza tus datos con tu cuenta y mantiene una copia local para trabajar con mayor resiliencia.</footer>
   </div>
 
   <div id="scheduleModal" class="modal hidden" role="dialog" aria-modal="true" aria-labelledby="modalTitle">
@@ -130,6 +168,7 @@
 
   <div id="toast" class="toast" role="status" aria-live="polite"></div>
 
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
   <script src="app.js"></script>
 </body>
 </html>

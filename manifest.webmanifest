@@ -1,7 +1,7 @@
 {
   "name": "Noti",
   "short_name": "Noti",
-  "description": "Horarios semanales, notas diarias y lienzo de dibujo.",
+  "description": "Horarios, notas, pendientes y dibujo sincronizados.",
   "lang": "es-CO",
   "start_url": "./",
   "scope": "./",
@@ -10,17 +10,7 @@
   "background_color": "#080b10",
   "theme_color": "#0b0f14",
   "icons": [
-    {
-      "src": "icons/icon-192.png",
-      "sizes": "192x192",
-      "type": "image/png",
-      "purpose": "any maskable"
-    },
-    {
-      "src": "icons/icon-512.png",
-      "sizes": "512x512",
-      "type": "image/png",
-      "purpose": "any maskable"
-    }
+    { "src": "icons/icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any maskable" },
+    { "src": "icons/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any maskable" }
   ]
 }
