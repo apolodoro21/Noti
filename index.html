@@ -29,12 +29,20 @@
           <input id="authName" type="text" autocomplete="name" placeholder="Tu nombre">
         </label>
         <label class="field">
+          <span>Usuario</span>
+          <input id="authUsername" type="text" autocomplete="username" autocapitalize="none" autocorrect="off" spellcheck="false" placeholder="Tu usuario" required>
+        </label>
+        <label id="emailField" class="field hidden">
           <span>Correo electrónico</span>
-          <input id="authEmail" type="email" autocomplete="email" placeholder="tucorreo@email.com" required>
+          <input id="authEmail" type="email" autocomplete="email" placeholder="tucorreo@email.com">
         </label>
         <label class="field">
           <span>Contraseña</span>
           <input id="authPassword" type="password" autocomplete="current-password" placeholder="Mínimo 6 caracteres" minlength="6" required>
+        </label>
+        <label id="passwordConfirmField" class="field hidden">
+          <span>Confirmar contraseña</span>
+          <input id="authPasswordConfirm" type="password" autocomplete="new-password" placeholder="Repite la contraseña" minlength="6">
         </label>
         <button id="authSubmit" class="primary-btn auth-submit" type="submit">Entrar a Noti</button>
       </form>

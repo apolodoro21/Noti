@@ -38,8 +38,12 @@ const els = {
   authForm: document.getElementById('authForm'),
   authName: document.getElementById('authName'),
   nameField: document.getElementById('nameField'),
+  authUsername: document.getElementById('authUsername'),
+  emailField: document.getElementById('emailField'),
   authEmail: document.getElementById('authEmail'),
   authPassword: document.getElementById('authPassword'),
+  passwordConfirmField: document.getElementById('passwordConfirmField'),
+  authPasswordConfirm: document.getElementById('authPasswordConfirm'),
   authSubmit: document.getElementById('authSubmit'),
   authMessage: document.getElementById('authMessage'),
   loginTab: document.getElementById('loginTab'),
@@ -149,35 +153,66 @@ function setAuthMode(mode) {
   els.loginTab.classList.toggle('active', !signup);
   els.signupTab.classList.toggle('active', signup);
   els.nameField.classList.toggle('hidden', !signup);
+  els.emailField.classList.toggle('hidden', !signup);
+  els.passwordConfirmField.classList.toggle('hidden', !signup);
   els.authName.required = signup;
+  els.authEmail.required = signup;
+  els.authPasswordConfirm.required = signup;
+  els.authUsername.placeholder = signup ? 'Ej: rey_23 (minúsculas, números, _ y .)' : 'Tu usuario';
   els.authSubmit.textContent = signup ? 'Crear mi cuenta' : 'Entrar a Noti';
   els.authPassword.autocomplete = signup ? 'new-password' : 'current-password';
   showAuthMessage('');
 }
 
+const USERNAME_RE = /^[a-z0-9_.]{3,20}$/;
+
 async function handleAuthSubmit(event) {
   event.preventDefault();
-  const email = els.authEmail.value.trim();
+  const rawUsername = els.authUsername.value.trim();
   const password = els.authPassword.value;
-  const name = els.authName.value.trim();
 
   els.authSubmit.disabled = true;
   showAuthMessage(authMode === 'signup' ? 'Creando tu cuenta…' : 'Iniciando sesión…');
 
   try {
     if (authMode === 'signup') {
+      const name = els.authName.value.trim();
+      const username = rawUsername.toLowerCase();
+      const email = els.authEmail.value.trim();
+
+      if (!name) throw new Error('NAME_REQUIRED');
+      if (!USERNAME_RE.test(username)) throw new Error('USERNAME_INVALID');
+      if (password !== els.authPasswordConfirm.value) throw new Error('PASSWORD_MISMATCH');
+
+      const { data: available, error: availableError } = await supabaseClient
+        .rpc('username_available', { p_username: username });
+      if (availableError) throw availableError;
+      if (!available) throw new Error('USERNAME_TAKEN');
+
       const { data, error } = await supabaseClient.auth.signUp({
         email,
         password,
-        options: { data: { display_name: name } }
+        options: { data: { display_name: name, username } }
       });
       if (error) throw error;
       if (data.session) {
         await bootstrapUser(data.user);
       } else {
-        showAuthMessage('Cuenta creada. Revisa tu correo para confirmar la cuenta y luego inicia sesión.', 'success');
+        setAuthMode('login');
+        els.authPassword.value = '';
+        els.authPasswordConfirm.value = '';
+        showAuthMessage('Cuenta creada. Revisa tu correo para confirmarla y luego inicia sesión con tu usuario.', 'success');
       }
     } else {
+      // Si alguien escribe un correo en el campo Usuario, se usa tal cual.
+      let email = rawUsername;
+      if (!rawUsername.includes('@')) {
+        const { data: foundEmail, error: lookupError } = await supabaseClient
+          .rpc('get_login_email', { p_username: rawUsername.toLowerCase() });
+        if (lookupError) throw lookupError;
+        if (!foundEmail) throw new Error('USERNAME_NOT_FOUND');
+        email = foundEmail;
+      }
       const { data, error } = await supabaseClient.auth.signInWithPassword({ email, password });
       if (error) throw error;
       await bootstrapUser(data.user);
@@ -191,9 +226,17 @@ async function handleAuthSubmit(event) {
 
 function humanAuthError(error) {
   const msg = error?.message || 'No se pudo completar la operación.';
-  if (/invalid login credentials/i.test(msg)) return 'Correo o contraseña incorrectos.';
+  if (msg === 'NAME_REQUIRED') return 'Escribe tu nombre.';
+  if (msg === 'USERNAME_INVALID') return 'El usuario debe tener de 3 a 20 caracteres: minúsculas, números, _ o . (sin espacios).';
+  if (msg === 'USERNAME_TAKEN') return 'Ese usuario ya está en uso. Prueba con otro.';
+  if (msg === 'USERNAME_NOT_FOUND') return 'No encontramos ese usuario. Revisa cómo lo escribiste.';
+  if (msg === 'PASSWORD_MISMATCH') return 'Las contraseñas no coinciden.';
+  if (/get_login_email|username_available/i.test(msg) && /(could not find|does not exist|schema cache)/i.test(msg)) {
+    return 'Falta configurar el acceso por usuario en Supabase (funciones get_login_email / username_available).';
+  }
+  if (/invalid login credentials/i.test(msg)) return 'Usuario o contraseña incorrectos.';
   if (/email not confirmed/i.test(msg)) return 'Tu correo todavía no está confirmado. Revisa tu bandeja de entrada.';
-  if (/user already registered/i.test(msg)) return 'Ese correo ya tiene una cuenta. Prueba iniciando sesión.';
+  if (/user already registered/i.test(msg)) return 'Ese correo ya tiene una cuenta. Prueba iniciando sesión con tu usuario.';
   if (/password/i.test(msg) && /6/i.test(msg)) return 'La contraseña debe tener al menos 6 caracteres.';
   return msg;
 }
@@ -220,9 +263,12 @@ async function bootstrapUser(authUser) {
 }
 
 async function ensureProfile(displayName) {
+  const row = { id: user.id, display_name: displayName };
+  const metaUsername = user.user_metadata?.username;
+  if (metaUsername) row.username = String(metaUsername).toLowerCase();
   const { error } = await supabaseClient
     .from('profiles')
-    .upsert({ id: user.id, display_name: displayName }, { onConflict: 'id' });
+    .upsert(row, { onConflict: 'id' });
   if (error) console.warn('No se pudo actualizar profile:', error.message);
 }
 

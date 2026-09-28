@@ -1,4 +1,4 @@
-const CACHE = 'noti-v2';
+const CACHE = 'noti-v3';
 const ASSETS = [
   './',
   './index.html',
