@@ -11,56 +11,50 @@
   <title>Noti</title>
 </head>
 <body>
+  <div id="versionBadge" class="version-badge" aria-label="Versión de Noti">v3.0</div>
+
   <div id="authScreen" class="auth-screen">
     <div class="auth-card card">
       <div class="brand-mark">N</div>
-      <p class="eyebrow">TU ORGANIZACIÓN PERSONAL</p>
+      <p class="eyebrow" data-i18n="auth.eyebrow">TU ORGANIZACIÓN PERSONAL</p>
       <h1>Noti</h1>
-      <p class="auth-subtitle">Tus días, tus notas y tus pendientes, sincronizados en todos tus dispositivos.</p>
+      <p class="auth-subtitle" data-i18n="auth.subtitle">Tus días, tus notas y tus pendientes, sincronizados en todos tus dispositivos.</p>
 
       <div class="auth-tabs" role="tablist" aria-label="Acceso a Noti">
-        <button id="loginTab" class="auth-tab active" type="button">Iniciar sesión</button>
-        <button id="signupTab" class="auth-tab" type="button">Crear cuenta</button>
+        <button id="loginTab" class="auth-tab active" type="button" data-i18n="auth.loginTab">Iniciar sesión</button>
+        <button id="signupTab" class="auth-tab" type="button" data-i18n="auth.signupTab">Crear cuenta</button>
       </div>
 
       <form id="authForm" class="auth-form">
         <label id="nameField" class="field hidden">
-          <span>Nombre</span>
-          <input id="authName" type="text" autocomplete="name" placeholder="Tu nombre">
+          <span data-i18n="auth.name">Nombre</span>
+          <input id="authName" type="text" autocomplete="name" placeholder="Tu nombre" data-i18n-placeholder="auth.namePlaceholder">
         </label>
         <label class="field">
-          <span>Usuario</span>
-          <input id="authUsername" type="text" autocomplete="username" autocapitalize="none" autocorrect="off" spellcheck="false" placeholder="Tu usuario" required>
-        </label>
-        <label id="emailField" class="field hidden">
-          <span>Correo electrónico</span>
-          <input id="authEmail" type="email" autocomplete="email" placeholder="tucorreo@email.com">
+          <span data-i18n="auth.email">Correo electrónico</span>
+          <input id="authEmail" type="email" autocomplete="email" placeholder="tucorreo@email.com" data-i18n-placeholder="auth.emailPlaceholder" required>
         </label>
         <label class="field">
-          <span>Contraseña</span>
-          <input id="authPassword" type="password" autocomplete="current-password" placeholder="Mínimo 6 caracteres" minlength="6" required>
+          <span data-i18n="auth.password">Contraseña</span>
+          <input id="authPassword" type="password" autocomplete="current-password" placeholder="Mínimo 6 caracteres" data-i18n-placeholder="auth.passwordPlaceholder" minlength="6" required>
         </label>
-        <label id="passwordConfirmField" class="field hidden">
-          <span>Confirmar contraseña</span>
-          <input id="authPasswordConfirm" type="password" autocomplete="new-password" placeholder="Repite la contraseña" minlength="6">
-        </label>
-        <button id="authSubmit" class="primary-btn auth-submit" type="submit">Entrar a Noti</button>
+        <button id="authSubmit" class="primary-btn auth-submit" type="submit" data-i18n="auth.submitLogin">Entrar a Noti</button>
       </form>
 
       <p id="authMessage" class="auth-message" role="status" aria-live="polite"></p>
-      <p class="auth-note">Tus datos se guardan en tu cuenta de Noti y se sincronizan con Supabase.</p>
+      <p class="auth-note" data-i18n="auth.note">Tus datos se guardan en tu cuenta de Noti y se sincronizan con Supabase.</p>
     </div>
   </div>
 
   <div id="appScreen" class="app-shell hidden">
     <header class="topbar">
       <div>
-        <p class="eyebrow">ORGANIZACIÓN PERSONAL</p>
         <h1>Noti</h1>
         <p id="welcomeLine" class="welcome-line"></p>
       </div>
       <div class="top-actions">
         <span id="syncStatus" class="sync-badge">Sincronizado</span>
+        <button id="settingsBtn" class="icon-btn" type="button" title="Ajustes" aria-label="Ajustes">🔧</button>
         <button id="installBtn" class="icon-btn" type="button" title="Instalar app" aria-label="Instalar app">⇩</button>
         <button id="logoutBtn" class="icon-btn" type="button" title="Cerrar sesión" aria-label="Cerrar sesión">↪</button>
       </div>
@@ -69,29 +63,29 @@
     <main>
       <section class="day-strip" aria-label="Seleccionar día">
         <div class="day-group">
-          <span class="group-label">Semana</span>
+          <span class="group-label" data-i18n="day.week">Semana</span>
           <div id="weekdayButtons" class="day-buttons"></div>
         </div>
         <div class="day-group weekend-group">
-          <span class="group-label">Fin de semana</span>
+          <span class="group-label" data-i18n="day.weekend">Fin de semana</span>
           <div id="weekendButtons" class="day-buttons"></div>
         </div>
       </section>
 
       <section class="day-heading card">
         <div>
-          <span class="muted">HOJA DEL DÍA</span>
+          <span class="muted" data-i18n="day.sheet">HOJA DEL DÍA</span>
           <h2 id="dayTitle">Lunes</h2>
           <p id="daySubtitle">Horario universitario, pendientes y notas.</p>
         </div>
-        <button id="editScheduleBtn" class="secondary-btn" type="button">Editar horario</button>
+        <button id="editScheduleBtn" class="secondary-btn" type="button" data-i18n="schedule.edit">Editar horario</button>
       </section>
 
       <section id="scheduleSection" class="card">
         <div class="section-head">
           <div>
-            <span class="muted">HORARIO</span>
-            <h3>Asignaturas y actividades</h3>
+            <span class="muted" data-i18n="schedule.label">HORARIO</span>
+            <h3 data-i18n="schedule.title">Asignaturas y actividades</h3>
           </div>
           <span id="scheduleCount" class="pill">0 bloques</span>
         </div>
@@ -102,20 +96,30 @@
         <article class="card editor-card">
           <div class="section-head">
             <div>
-              <span class="muted">NOTAS</span>
-              <h3>Apuntes del día</h3>
+              <span class="muted" data-i18n="notes.label">NOTAS</span>
+              <h3 data-i18n="notes.title">Apuntes del día</h3>
             </div>
             <span id="saveStatus" class="save-status">Sin cambios</span>
           </div>
 
           <div class="toolbar" role="toolbar" aria-label="Herramientas de texto">
-            <select id="fontSelect" aria-label="Tipografía">
+            <select id="fontSelect" aria-label="Tipografía" title="Tipografía">
               <option value="system">Sans-serif</option>
               <option value="serif">Serif</option>
-              <option value="mono">Monospaced</option>
+              <option value="mono">Monoespaciada</option>
+              <option value="arial">Arial</option>
+              <option value="helvetica">Helvetica</option>
+              <option value="times">Times New Roman</option>
+              <option value="garamond">Garamond</option>
+              <option value="trebuchet">Trebuchet MS</option>
+              <option value="verdana">Verdana</option>
+              <option value="courier">Courier New</option>
             </select>
-            <button class="tool-btn" data-command="bold" type="button"><strong>B</strong></button>
-            <button id="checklistBtn" class="tool-btn" type="button" title="Añadir checklist">☑</button>
+            <select id="fontSizeSelect" aria-label="Tamaño del texto" title="Tamaño del texto"></select>
+            <button class="tool-btn" data-command="bold" type="button" title="Negrita" aria-label="Negrita"><strong>B</strong></button>
+            <button id="highlightBtn" class="tool-btn" type="button" title="Resaltador" aria-label="Resaltador">🖍</button>
+            <button class="tool-btn" data-command="strikeThrough" type="button" title="Tachado" aria-label="Tachado"><s>S</s></button>
+            <button id="checklistBtn" class="tool-btn" type="button" title="Añadir checklist" aria-label="Añadir checklist">☑</button>
           </div>
 
           <div id="noteEditor" class="note-editor font-system" contenteditable="true" data-placeholder="Escribe aquí tus apuntes, tareas, ideas o recordatorios..."></div>
@@ -124,24 +128,24 @@
         <article class="card drawing-card">
           <div class="section-head">
             <div>
-              <span class="muted">LIENZO</span>
-              <h3>Dibujo a mano alzada</h3>
+              <span class="muted" data-i18n="drawing.label">LIENZO</span>
+              <h3 data-i18n="drawing.title">Dibujo a mano alzada</h3>
             </div>
             <span id="drawingStatus" class="save-status">Sin cambios</span>
           </div>
 
           <div class="drawing-toolbar">
             <label class="color-picker" title="Color">
-              <span>Color</span>
+              <span data-i18n="drawing.color">Color</span>
               <input id="brushColor" type="color" value="#e8edf2">
             </label>
             <label class="size-control" title="Grosor">
-              <span>Grosor</span>
+              <span data-i18n="drawing.size">Grosor</span>
               <input id="brushSize" type="range" min="1" max="32" value="5">
               <output id="brushSizeValue">5</output>
             </label>
             <button id="eraserBtn" class="tool-btn" type="button" title="Borrador">⌫</button>
-            <button id="clearCanvasBtn" class="danger-outline" type="button">Limpiar</button>
+            <button id="clearCanvasBtn" class="danger-outline" type="button" data-i18n="drawing.clear">Limpiar</button>
           </div>
 
           <div class="canvas-wrap">
@@ -151,7 +155,7 @@
       </section>
     </main>
 
-    <footer class="footer-note">Noti sincroniza tus datos con tu cuenta y mantiene una copia local para trabajar con mayor resiliencia.</footer>
+    <footer class="footer-note" data-i18n="footer">Noti sincroniza tus datos con tu cuenta y mantiene una copia local para trabajar con mayor resiliencia.</footer>
   </div>
 
   <div id="scheduleModal" class="modal hidden" role="dialog" aria-modal="true" aria-labelledby="modalTitle">
@@ -159,17 +163,58 @@
     <div class="modal-card">
       <div class="modal-head">
         <div>
-          <span class="muted">CONFIGURACIÓN</span>
-          <h2 id="modalTitle">Editar horario</h2>
+          <span class="muted" data-i18n="schedule.config">CONFIGURACIÓN</span>
+          <h2 id="modalTitle" data-i18n="schedule.modalTitle">Editar horario</h2>
         </div>
         <button id="closeModalBtn" class="icon-btn" type="button" aria-label="Cerrar">×</button>
       </div>
-      <p class="modal-help">Agrega las materias o actividades de este día. Puedes dejar filas vacías.</p>
+      <p class="modal-help" data-i18n="schedule.help">Agrega las materias o actividades de este día. Puedes dejar filas vacías.</p>
       <div id="scheduleRows" class="schedule-form"></div>
-      <button id="addScheduleRowBtn" class="secondary-btn full-btn" type="button">+ Agregar bloque</button>
+      <button id="addScheduleRowBtn" class="secondary-btn full-btn" type="button" data-i18n="schedule.addBlock">+ Agregar bloque</button>
       <div class="modal-actions">
-        <button id="cancelScheduleBtn" class="secondary-btn" type="button">Cancelar</button>
-        <button id="saveScheduleBtn" class="primary-btn" type="button">Guardar horario</button>
+        <button id="cancelScheduleBtn" class="secondary-btn" type="button" data-i18n="common.cancel">Cancelar</button>
+        <button id="saveScheduleBtn" class="primary-btn" type="button" data-i18n="common.save">Guardar horario</button>
+      </div>
+    </div>
+  </div>
+
+  <div id="settingsModal" class="modal hidden" role="dialog" aria-modal="true" aria-labelledby="settingsTitle">
+    <div class="modal-backdrop" data-close-settings="true"></div>
+    <div class="modal-card settings-card">
+      <div class="modal-head">
+        <div>
+          <span class="muted" data-i18n="settings.label">PERSONALIZACIÓN</span>
+          <h2 id="settingsTitle" data-i18n="settings.title">Ajustes</h2>
+        </div>
+        <button id="closeSettingsBtn" class="icon-btn" type="button" aria-label="Cerrar">×</button>
+      </div>
+
+      <div class="settings-group">
+        <label class="settings-field">
+          <span data-i18n="settings.language">Idioma</span>
+          <select id="languageSelect" aria-label="Idioma">
+            <option value="es">Español</option>
+            <option value="en">English</option>
+          </select>
+        </label>
+      </div>
+
+      <div class="settings-group">
+        <span class="settings-label" data-i18n="settings.mode">Modo de color</span>
+        <div class="segmented-control">
+          <button id="lightModeBtn" class="secondary-btn" type="button" data-theme-choice="light" data-i18n="settings.light">Claro</button>
+          <button id="darkModeBtn" class="secondary-btn" type="button" data-theme-choice="dark" data-i18n="settings.dark">Oscuro</button>
+        </div>
+      </div>
+
+      <div class="settings-group">
+        <span class="settings-label" data-i18n="settings.palette">Paleta de colores</span>
+        <div id="paletteOptions" class="palette-grid"></div>
+      </div>
+
+      <p id="settingsSaveStatus" class="settings-save-status"></p>
+      <div class="modal-actions">
+        <button id="closeSettingsFooterBtn" class="primary-btn" type="button" data-i18n="common.done">Listo</button>
       </div>
     </div>
   </div>

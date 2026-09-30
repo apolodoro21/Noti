@@ -19,6 +19,7 @@ const DEFAULT_STATE = {
   notes: {},
   drawings: {},
   fonts: {},
+  preferences: null,
   schedules: Object.fromEntries(DAYS.map(d => [d.id, []]))
 };
 
@@ -38,12 +39,8 @@ const els = {
   authForm: document.getElementById('authForm'),
   authName: document.getElementById('authName'),
   nameField: document.getElementById('nameField'),
-  authUsername: document.getElementById('authUsername'),
-  emailField: document.getElementById('emailField'),
   authEmail: document.getElementById('authEmail'),
   authPassword: document.getElementById('authPassword'),
-  passwordConfirmField: document.getElementById('passwordConfirmField'),
-  authPasswordConfirm: document.getElementById('authPasswordConfirm'),
   authSubmit: document.getElementById('authSubmit'),
   authMessage: document.getElementById('authMessage'),
   loginTab: document.getElementById('loginTab'),
@@ -52,6 +49,15 @@ const els = {
   syncStatus: document.getElementById('syncStatus'),
   drawingStatus: document.getElementById('drawingStatus'),
   logoutBtn: document.getElementById('logoutBtn'),
+  settingsBtn: document.getElementById('settingsBtn'),
+  settingsModal: document.getElementById('settingsModal'),
+  closeSettingsBtn: document.getElementById('closeSettingsBtn'),
+  closeSettingsFooterBtn: document.getElementById('closeSettingsFooterBtn'),
+  languageSelect: document.getElementById('languageSelect'),
+  lightModeBtn: document.getElementById('lightModeBtn'),
+  darkModeBtn: document.getElementById('darkModeBtn'),
+  paletteOptions: document.getElementById('paletteOptions'),
+  settingsSaveStatus: document.getElementById('settingsSaveStatus'),
   weekdayButtons: document.getElementById('weekdayButtons'),
   weekendButtons: document.getElementById('weekendButtons'),
   dayTitle: document.getElementById('dayTitle'),
@@ -60,6 +66,8 @@ const els = {
   scheduleCount: document.getElementById('scheduleCount'),
   noteEditor: document.getElementById('noteEditor'),
   fontSelect: document.getElementById('fontSelect'),
+  fontSizeSelect: document.getElementById('fontSizeSelect'),
+  highlightBtn: document.getElementById('highlightBtn'),
   checklistBtn: document.getElementById('checklistBtn'),
   saveStatus: document.getElementById('saveStatus'),
   canvas: document.getElementById('drawingCanvas'),
@@ -80,6 +88,168 @@ const els = {
 
 function cloneDefault() {
   return JSON.parse(JSON.stringify(DEFAULT_STATE));
+}
+
+const APP_VERSION = '3.0';
+const DEFAULT_PREFERENCES = { language: 'es', theme: 'dark', palette: 'blue' };
+const PALETTES = [
+  { id:'blue', name:{es:'Azul suave',en:'Soft blue'}, colors:['#7aa7f8','#8f82e8'] },
+  { id:'lavender', name:{es:'Lavanda',en:'Lavender'}, colors:['#9b8ce8','#c29bea'] },
+  { id:'mint', name:{es:'Menta',en:'Mint'}, colors:['#65b9a4','#7fc8b0'] },
+  { id:'peach', name:{es:'Durazno',en:'Peach'}, colors:['#e4a17d','#e5b27f'] },
+  { id:'rose', name:{es:'Rosa',en:'Rose'}, colors:['#d98ba9','#c99bdc'] }
+];
+
+const I18N = {
+  es: {
+    'auth.eyebrow':'TU ORGANIZACIÓN PERSONAL','auth.subtitle':'Tus días, tus notas y tus pendientes, sincronizados en todos tus dispositivos.','auth.loginTab':'Iniciar sesión','auth.signupTab':'Crear cuenta','auth.name':'Nombre','auth.namePlaceholder':'Tu nombre','auth.email':'Correo electrónico','auth.emailPlaceholder':'tucorreo@email.com','auth.password':'Contraseña','auth.passwordPlaceholder':'Mínimo 6 caracteres','auth.submitLogin':'Entrar a Noti','auth.submitSignup':'Crear mi cuenta','auth.note':'Tus datos se guardan en tu cuenta de Noti y se sincronizan con Supabase.',
+    'day.week':'Semana','day.weekend':'Fin de semana','day.sheet':'HOJA DEL DÍA','schedule.edit':'Editar horario','schedule.label':'HORARIO','schedule.title':'Asignaturas y actividades','notes.label':'NOTAS','notes.title':'Apuntes del día','drawing.label':'LIENZO','drawing.title':'Dibujo a mano alzada','drawing.color':'Color','drawing.size':'Grosor','drawing.clear':'Limpiar','footer':'Noti sincroniza tus datos con tu cuenta y mantiene una copia local para trabajar con mayor resiliencia.',
+    'schedule.config':'CONFIGURACIÓN','schedule.modalTitle':'Editar horario','schedule.help':'Agrega las materias o actividades de este día. Puedes dejar filas vacías.','schedule.addBlock':'+ Agregar bloque','common.cancel':'Cancelar','common.save':'Guardar horario','common.done':'Listo',
+    'settings.label':'PERSONALIZACIÓN','settings.title':'Ajustes','settings.language':'Idioma','settings.mode':'Modo de color','settings.light':'Claro','settings.dark':'Oscuro','settings.palette':'Paleta de colores','settings.saved':'Preferencias guardadas','settings.localOnly':'Preferencias guardadas localmente. Ejecuta la migración SQL para sincronizarlas entre dispositivos.','settings.saveError':'No se pudieron sincronizar las preferencias; quedaron guardadas localmente.',
+    'auth.creating':'Creando tu cuenta…','auth.signingIn':'Iniciando sesión…','auth.created':'Cuenta creada. Revisa tu correo para confirmar la cuenta y luego inicia sesión.','auth.invalid':'Correo o contraseña incorrectos.','auth.unconfirmed':'Tu correo todavía no está confirmado. Revisa tu bandeja de entrada.','auth.registered':'Ese correo ya tiene una cuenta. Prueba iniciando sesión.','auth.password6':'La contraseña debe tener al menos 6 caracteres.','auth.generic':'No se pudo completar la operación.','auth.loggedOut':'Sesión cerrada.','auth.loadError':'No se pudo cargar tu información. Revisa la conexión e inténtalo de nuevo.',
+    'sync.synced':'Sincronizado','sync.connecting':'Conectando…','sync.saving':'Guardando…','sync.uploading':'Subiendo datos locales…','sync.updating':'Actualizando…','sync.limited':'Conexión limitada','sync.error':'Error de conexión','sync.localSaved':'Guardado local','sync.noteSaved':'Nota sincronizada','sync.scheduleSaved':'Horario sincronizado','sync.drawingSaved':'Dibujo sincronizado','sync.localMigrated':'Tus datos locales quedaron sincronizados','sync.scheduleLocal':'Horario guardado localmente; se sincronizará al reconectar.',
+    'editor.placeholder':'Escribe aquí tus apuntes, tareas, ideas o recordatorios...','editor.font':'Tipografía','editor.size':'Tamaño del texto','editor.bold':'Negrita','editor.highlight':'Resaltador','editor.strike':'Tachado','editor.checklist':'Añadir checklist','editor.task':'Tarea pendiente','editor.highlightFixed':'Resaltado amarillo suave','editor.fontSize':'Tamaño',
+    'day.mon':'Lunes','day.tue':'Martes','day.wed':'Miércoles','day.thu':'Jueves','day.fri':'Viernes','day.sat':'Sábado','day.sun':'Domingo','day.monShort':'Lun','day.tueShort':'Mar','day.wedShort':'Mié','day.thuShort':'Jue','day.friShort':'Vie','day.satShort':'Sáb','day.sunShort':'Dom',
+    'day.weekSubtitle':'Horario universitario, pendientes y notas del día.','day.weekendSubtitle':'Pendientes personales, tareas y recordatorios del fin de semana.','schedule.empty':'No hay bloques programados. Usa <strong>Editar horario</strong> para agregar materias, horas o actividades.','schedule.editInline':'Editar','schedule.blocks':'bloques','schedule.block':'bloque',
+    'schedule.time':'Hora','schedule.subject':'Materia o actividad','schedule.detail':'Aula / detalle','schedule.remove':'Eliminar','schedule.timePlaceholder':'08:00 - 10:00','schedule.subjectPlaceholder':'Materia / actividad','schedule.detailPlaceholder':'Aula / detalle','schedule.noTime':'Sin hora','schedule.noName':'Sin nombre',
+    'drawing.eraser':'Borrador','drawing.pencil':'Lápiz','drawing.confirm':'¿Limpiar todo el dibujo de este día?','pwa.install':'Instalar app','pwa.installHint':'En Chrome: menú ⋮ → Instalar aplicación','pwa.installed':'Noti instalada','auth.logout':'Cerrar sesión','common.close':'Cerrar'
+  },
+  en: {
+    'auth.eyebrow':'YOUR PERSONAL ORGANIZATION','auth.subtitle':'Your days, notes and tasks, synchronized across all your devices.','auth.loginTab':'Sign in','auth.signupTab':'Create account','auth.name':'Name','auth.namePlaceholder':'Your name','auth.email':'Email','auth.emailPlaceholder':'you@email.com','auth.password':'Password','auth.passwordPlaceholder':'At least 6 characters','auth.submitLogin':'Enter Noti','auth.submitSignup':'Create my account','auth.note':'Your data is stored in your Noti account and synchronized with Supabase.',
+    'day.week':'Week','day.weekend':'Weekend','day.sheet':'DAY SHEET','schedule.edit':'Edit schedule','schedule.label':'SCHEDULE','schedule.title':'Subjects and activities','notes.label':'NOTES','notes.title':'Daily notes','drawing.label':'CANVAS','drawing.title':'Freehand drawing','drawing.color':'Color','drawing.size':'Size','drawing.clear':'Clear','footer':'Noti synchronizes your data with your account and keeps a local copy for resilience.',
+    'schedule.config':'CONFIGURATION','schedule.modalTitle':'Edit schedule','schedule.help':'Add subjects or activities for this day. You can leave rows empty.','schedule.addBlock':'+ Add block','common.cancel':'Cancel','common.save':'Save schedule','common.done':'Done',
+    'settings.label':'PERSONALIZATION','settings.title':'Settings','settings.language':'Language','settings.mode':'Color mode','settings.light':'Light','settings.dark':'Dark','settings.palette':'Color palette','settings.saved':'Preferences saved','settings.localOnly':'Preferences saved locally. Run the SQL migration to sync them across devices.','settings.saveError':'Preferences could not be synchronized; they were saved locally.',
+    'auth.creating':'Creating your account…','auth.signingIn':'Signing in…','auth.created':'Account created. Check your email to confirm your account, then sign in.','auth.invalid':'Incorrect email or password.','auth.unconfirmed':'Your email has not been confirmed yet. Check your inbox.','auth.registered':'That email already has an account. Try signing in.','auth.password6':'Password must be at least 6 characters.','auth.generic':'The operation could not be completed.','auth.loggedOut':'Signed out.','auth.loadError':'Could not load your information. Check your connection and try again.',
+    'sync.synced':'Synchronized','sync.connecting':'Connecting…','sync.saving':'Saving…','sync.uploading':'Uploading local data…','sync.updating':'Updating…','sync.limited':'Limited connection','sync.error':'Connection error','sync.localSaved':'Saved locally','sync.noteSaved':'Note synchronized','sync.scheduleSaved':'Schedule synchronized','sync.drawingSaved':'Drawing synchronized','sync.localMigrated':'Your local data is now synchronized','sync.scheduleLocal':'Schedule saved locally; it will sync when you reconnect.',
+    'editor.placeholder':'Write your notes, tasks, ideas or reminders here...','editor.font':'Font','editor.size':'Text size','editor.bold':'Bold','editor.highlight':'Highlighter','editor.strike':'Strikethrough','editor.checklist':'Add checklist','editor.task':'Pending task','editor.highlightFixed':'Soft yellow highlight','editor.fontSize':'Size',
+    'day.mon':'Monday','day.tue':'Tuesday','day.wed':'Wednesday','day.thu':'Thursday','day.fri':'Friday','day.sat':'Saturday','day.sun':'Sunday','day.monShort':'Mon','day.tueShort':'Tue','day.wedShort':'Wed','day.thuShort':'Thu','day.friShort':'Fri','day.satShort':'Sat','day.sunShort':'Sun',
+    'day.weekSubtitle':'University schedule, tasks and notes for the day.','day.weekendSubtitle':'Personal tasks, to-dos and reminders for the weekend.','schedule.empty':'No scheduled blocks. Use <strong>Edit schedule</strong> to add subjects, times or activities.','schedule.editInline':'Edit','schedule.blocks':'blocks','schedule.block':'block',
+    'schedule.time':'Time','schedule.subject':'Subject or activity','schedule.detail':'Room / detail','schedule.remove':'Remove','schedule.timePlaceholder':'08:00 - 10:00','schedule.subjectPlaceholder':'Subject / activity','schedule.detailPlaceholder':'Room / detail','schedule.noTime':'No time','schedule.noName':'No name',
+    'drawing.eraser':'Eraser','drawing.pencil':'Pencil','drawing.confirm':'Clear the entire drawing for this day?','pwa.install':'Install app','pwa.installHint':'In Chrome: menu ⋮ → Install app','pwa.installed':'Noti installed','auth.logout':'Sign out','common.close':'Close'
+  }
+};
+
+let preferences = { ...DEFAULT_PREFERENCES };
+let preferencesLoadedFromCloud = false;
+
+function t(key, vars = {}) {
+  let value = I18N[preferences.language]?.[key] ?? I18N.es[key] ?? key;
+  Object.entries(vars).forEach(([name, replacement]) => { value = value.replaceAll(`{${name}}`, replacement); });
+  return value;
+}
+
+function normalizePreferences(value) {
+  const next = { ...DEFAULT_PREFERENCES, ...(value || {}) };
+  if (!['es','en'].includes(next.language)) next.language = 'es';
+  if (!['dark','light'].includes(next.theme)) next.theme = 'dark';
+  if (!PALETTES.some(p => p.id === next.palette)) next.palette = 'blue';
+  return next;
+}
+
+function applyPreferences() {
+  preferences = normalizePreferences(preferences);
+  document.documentElement.lang = preferences.language;
+  document.documentElement.dataset.theme = preferences.theme;
+  document.documentElement.dataset.palette = preferences.palette;
+  const themeMeta = document.querySelector('meta[name="theme-color"]');
+  if (themeMeta) themeMeta.content = preferences.theme === 'light' ? '#f5f7fb' : '#080b10';
+  document.querySelectorAll('[data-i18n]').forEach(el => { el.innerHTML = t(el.dataset.i18n); });
+  document.querySelectorAll('[data-i18n-placeholder]').forEach(el => { el.placeholder = t(el.dataset.i18nPlaceholder); });
+  els.noteEditor.dataset.placeholder = t('editor.placeholder');
+  els.fontSelect.title = t('editor.font');
+  els.fontSizeSelect.title = t('editor.size');
+  els.highlightBtn.title = `${t('editor.highlight')} (${t('editor.highlightFixed')})`;
+  els.highlightBtn.setAttribute('aria-label', t('editor.highlight'));
+  els.eraserBtn.title = drawing.erasing ? t('drawing.pencil') : t('drawing.eraser');
+  els.clearCanvasBtn.title = t('drawing.clear');
+  els.installBtn.title = t('pwa.install');
+  els.installBtn.setAttribute('aria-label', t('pwa.install'));
+  els.logoutBtn.title = t('auth.logout');
+  els.logoutBtn.setAttribute('aria-label', t('auth.logout'));
+  document.querySelectorAll('[aria-label="Cerrar"]').forEach(el => el.setAttribute('aria-label', t('common.close')));
+  els.noteEditor.setAttribute('aria-label', t('notes.title'));
+  els.canvas.setAttribute('aria-label', t('drawing.title'));
+  document.querySelector('.toolbar')?.setAttribute('aria-label', t('notes.title'));
+  document.querySelector('.day-strip')?.setAttribute('aria-label', t('day.sheet'));
+  document.querySelector('.color-picker')?.setAttribute('title', t('drawing.color'));
+  document.querySelector('.size-control')?.setAttribute('title', t('drawing.size'));
+  els.settingsBtn.title = t('settings.title');
+  renderSettingsControls();
+  renderAll({ preserveEditor:true });
+}
+
+function renderSettingsControls() {
+  els.languageSelect.value = preferences.language;
+  els.lightModeBtn.classList.toggle('active', preferences.theme === 'light');
+  els.darkModeBtn.classList.toggle('active', preferences.theme === 'dark');
+  els.paletteOptions.innerHTML = PALETTES.map(p => `
+    <button class="palette-option ${preferences.palette === p.id ? 'active' : ''}" type="button" data-palette="${p.id}" title="${escapeAttr(p.name[preferences.language])}">
+      <span class="palette-swatch" style="background:linear-gradient(90deg,${p.colors[0]},${p.colors[1]})"></span>
+      <span class="palette-name">${escapeHtml(p.name[preferences.language])}</span>
+    </button>`).join('');
+  els.paletteOptions.querySelectorAll('[data-palette]').forEach(btn => btn.addEventListener('click', () => changePreferences({ palette: btn.dataset.palette })));
+}
+
+async function changePreferences(patch) {
+  preferences = normalizePreferences({ ...preferences, ...patch });
+  applyPreferences();
+  saveLocalPreferences();
+  els.settingsSaveStatus.textContent = t('settings.saved');
+  try {
+    await saveCloudPreferences();
+  } catch (error) {
+    els.settingsSaveStatus.textContent = t('settings.localOnly');
+    console.warn('No se pudieron guardar preferencias en Supabase:', error.message);
+  }
+}
+
+function saveLocalPreferences() {
+  if (!user) return;
+  const local = loadLocalState();
+  local.preferences = preferences;
+  localStorage.setItem(userStorageKey(), JSON.stringify(local));
+  state.preferences = preferences;
+}
+
+async function saveCloudPreferences() {
+  if (!user) return;
+  const displayName = user.user_metadata?.display_name || user.email?.split('@')[0] || 'Usuario';
+  const { error } = await supabaseClient.from('profiles').upsert({ id:user.id, display_name:displayName, settings:preferences }, { onConflict:'id' });
+  if (error) throw error;
+  preferencesLoadedFromCloud = true;
+}
+
+async function loadPreferencesFromCloud() {
+  preferencesLoadedFromCloud = false;
+  const { data, error } = await supabaseClient.from('profiles').select('display_name, settings').eq('id', user.id).maybeSingle();
+  if (error) {
+    // Compatible with an existing database that has not received the new settings column yet.
+    if (/settings|column|schema/i.test(error.message || '')) return;
+    throw error;
+  }
+  if (data?.settings) {
+    preferences = normalizePreferences(data.settings);
+    preferencesLoadedFromCloud = true;
+  }
+  if (data?.display_name) user.display_name = data.display_name;
+}
+
+function openSettings() {
+  els.settingsModal.classList.remove('hidden');
+  els.settingsSaveStatus.textContent = '';
+  renderSettingsControls();
+}
+function closeSettings() { els.settingsModal.classList.add('hidden'); }
+
+function fillFontSizes() {
+  els.fontSizeSelect.innerHTML = '';
+  for (let size=10; size<=48; size++) {
+    const option = document.createElement('option');
+    option.value = String(size);
+    option.textContent = `${size}px`;
+    els.fontSizeSelect.appendChild(option);
+  }
+  els.fontSizeSelect.value = '16';
 }
 
 function userStorageKey() {
@@ -117,6 +287,7 @@ function loadLocalState() {
       notes: saved.notes || {},
       drawings: saved.drawings || {},
       fonts: saved.fonts || {},
+      preferences: saved.preferences || null,
       schedules: { ...cloneDefault().schedules, ...(saved.schedules || {}) }
     };
   } catch {
@@ -135,11 +306,11 @@ function setSyncStatus(text, mode = '') {
 }
 
 function markSaving(element = els.saveStatus) {
-  element.textContent = 'Guardando…';
+  element.textContent = t('sync.saving');
 }
 
 function markSaved(element = els.saveStatus) {
-  element.textContent = 'Sincronizado';
+  element.textContent = t('sync.synced');
 }
 
 function showAuthMessage(message, type = '') {
@@ -153,66 +324,35 @@ function setAuthMode(mode) {
   els.loginTab.classList.toggle('active', !signup);
   els.signupTab.classList.toggle('active', signup);
   els.nameField.classList.toggle('hidden', !signup);
-  els.emailField.classList.toggle('hidden', !signup);
-  els.passwordConfirmField.classList.toggle('hidden', !signup);
   els.authName.required = signup;
-  els.authEmail.required = signup;
-  els.authPasswordConfirm.required = signup;
-  els.authUsername.placeholder = signup ? 'Ej: rey_23 (minúsculas, números, _ y .)' : 'Tu usuario';
-  els.authSubmit.textContent = signup ? 'Crear mi cuenta' : 'Entrar a Noti';
+  els.authSubmit.textContent = signup ? t('auth.submitSignup') : t('auth.submitLogin');
   els.authPassword.autocomplete = signup ? 'new-password' : 'current-password';
   showAuthMessage('');
 }
 
-const USERNAME_RE = /^[a-z0-9_.]{3,20}$/;
-
 async function handleAuthSubmit(event) {
   event.preventDefault();
-  const rawUsername = els.authUsername.value.trim();
+  const email = els.authEmail.value.trim();
   const password = els.authPassword.value;
+  const name = els.authName.value.trim();
 
   els.authSubmit.disabled = true;
-  showAuthMessage(authMode === 'signup' ? 'Creando tu cuenta…' : 'Iniciando sesión…');
+  showAuthMessage(authMode === 'signup' ? t('auth.creating') : t('auth.signingIn'));
 
   try {
     if (authMode === 'signup') {
-      const name = els.authName.value.trim();
-      const username = rawUsername.toLowerCase();
-      const email = els.authEmail.value.trim();
-
-      if (!name) throw new Error('NAME_REQUIRED');
-      if (!USERNAME_RE.test(username)) throw new Error('USERNAME_INVALID');
-      if (password !== els.authPasswordConfirm.value) throw new Error('PASSWORD_MISMATCH');
-
-      const { data: available, error: availableError } = await supabaseClient
-        .rpc('username_available', { p_username: username });
-      if (availableError) throw availableError;
-      if (!available) throw new Error('USERNAME_TAKEN');
-
       const { data, error } = await supabaseClient.auth.signUp({
         email,
         password,
-        options: { data: { display_name: name, username } }
+        options: { data: { display_name: name } }
       });
       if (error) throw error;
       if (data.session) {
         await bootstrapUser(data.user);
       } else {
-        setAuthMode('login');
-        els.authPassword.value = '';
-        els.authPasswordConfirm.value = '';
-        showAuthMessage('Cuenta creada. Revisa tu correo para confirmarla y luego inicia sesión con tu usuario.', 'success');
+        showAuthMessage(t('auth.created'), 'success');
       }
     } else {
-      // Si alguien escribe un correo en el campo Usuario, se usa tal cual.
-      let email = rawUsername;
-      if (!rawUsername.includes('@')) {
-        const { data: foundEmail, error: lookupError } = await supabaseClient
-          .rpc('get_login_email', { p_username: rawUsername.toLowerCase() });
-        if (lookupError) throw lookupError;
-        if (!foundEmail) throw new Error('USERNAME_NOT_FOUND');
-        email = foundEmail;
-      }
       const { data, error } = await supabaseClient.auth.signInWithPassword({ email, password });
       if (error) throw error;
       await bootstrapUser(data.user);
@@ -225,19 +365,11 @@ async function handleAuthSubmit(event) {
 }
 
 function humanAuthError(error) {
-  const msg = error?.message || 'No se pudo completar la operación.';
-  if (msg === 'NAME_REQUIRED') return 'Escribe tu nombre.';
-  if (msg === 'USERNAME_INVALID') return 'El usuario debe tener de 3 a 20 caracteres: minúsculas, números, _ o . (sin espacios).';
-  if (msg === 'USERNAME_TAKEN') return 'Ese usuario ya está en uso. Prueba con otro.';
-  if (msg === 'USERNAME_NOT_FOUND') return 'No encontramos ese usuario. Revisa cómo lo escribiste.';
-  if (msg === 'PASSWORD_MISMATCH') return 'Las contraseñas no coinciden.';
-  if (/get_login_email|username_available/i.test(msg) && /(could not find|does not exist|schema cache)/i.test(msg)) {
-    return 'Falta configurar el acceso por usuario en Supabase (funciones get_login_email / username_available).';
-  }
-  if (/invalid login credentials/i.test(msg)) return 'Usuario o contraseña incorrectos.';
-  if (/email not confirmed/i.test(msg)) return 'Tu correo todavía no está confirmado. Revisa tu bandeja de entrada.';
-  if (/user already registered/i.test(msg)) return 'Ese correo ya tiene una cuenta. Prueba iniciando sesión con tu usuario.';
-  if (/password/i.test(msg) && /6/i.test(msg)) return 'La contraseña debe tener al menos 6 caracteres.';
+  const msg = error?.message || t('auth.generic');
+  if (/invalid login credentials/i.test(msg)) return t('auth.invalid');
+  if (/email not confirmed/i.test(msg)) return t('auth.unconfirmed');
+  if (/user already registered/i.test(msg)) return t('auth.registered');
+  if (/password/i.test(msg) && /6/i.test(msg)) return t('auth.password6');
   return msg;
 }
 
@@ -246,29 +378,33 @@ async function bootstrapUser(authUser) {
   els.authScreen.classList.add('hidden');
   els.appScreen.classList.remove('hidden');
   const displayName = authUser.user_metadata?.display_name || authUser.email?.split('@')[0] || 'Usuario';
-  els.welcomeLine.textContent = `Hola, ${displayName}`;
-  setSyncStatus('Conectando…', 'loading');
+  els.welcomeLine.textContent = displayName;
+  setSyncStatus(t('sync.connecting'), 'loading');
 
   initialLocalSnapshot = loadLocalState();
   state = cloneDefault();
   initialized = false;
+  preferences = normalizePreferences(initialLocalSnapshot.preferences || DEFAULT_PREFERENCES);
 
   await ensureProfile(displayName);
+  await loadPreferencesFromCloud().catch(error => console.warn('No se pudieron cargar preferencias:', error.message));
+  applyPreferences();
+  if (!preferencesLoadedFromCloud) {
+    saveLocalPreferences();
+    await saveCloudPreferences().catch(error => console.warn('No se pudieron inicializar preferencias en Supabase:', error.message));
+  }
   await loadCloudState();
   await setupRealtime();
 
   renderAll();
   initialized = true;
-  setSyncStatus('Sincronizado', 'success');
+  setSyncStatus(t('sync.synced'), 'success');
 }
 
 async function ensureProfile(displayName) {
-  const row = { id: user.id, display_name: displayName };
-  const metaUsername = user.user_metadata?.username;
-  if (metaUsername) row.username = String(metaUsername).toLowerCase();
-  const { error } = await supabaseClient
-    .from('profiles')
-    .upsert(row, { onConflict: 'id' });
+  const local = loadLocalState();
+  const payload = { id:user.id, display_name:displayName };
+  const { error } = await supabaseClient.from('profiles').upsert(payload, { onConflict:'id' });
   if (error) console.warn('No se pudo actualizar profile:', error.message);
 }
 
@@ -288,6 +424,7 @@ async function loadCloudState() {
   }
 
   const cloud = emptyStateForCloud();
+  cloud.preferences = preferences;
 
   (notesRes.data || []).forEach(row => {
     const day = DAYS.find(d => d.db === row.day_of_week);
@@ -319,6 +456,7 @@ async function loadCloudState() {
     await migrateLocalToCloud();
   } else {
     state = cloud;
+    state.preferences = preferences;
     state.selectedDay = initialLocalSnapshot?.selectedDay || 'mon';
     saveLocalState();
   }
@@ -332,7 +470,7 @@ function hasLocalData(candidate) {
 }
 
 async function migrateLocalToCloud() {
-  setSyncStatus('Subiendo datos locales…', 'loading');
+  setSyncStatus(t('sync.uploading'), 'loading');
   const daysWithData = DAYS.filter(day =>
     (state.notes[day.id] || '') || (state.drawings[day.id] || '') || (state.schedules[day.id] || []).length
   );
@@ -342,7 +480,7 @@ async function migrateLocalToCloud() {
     await replaceSchedules(day.id, state.schedules[day.id] || [], false);
   }
   saveLocalState();
-  showToast('Tus datos locales quedaron sincronizados');
+  showToastFn(t('sync.localMigrated'));
 }
 
 function parseTimeRange(time) {
@@ -396,7 +534,7 @@ async function replaceSchedules(dayId, rows, toast = true) {
       day_of_week: day.db,
       start_time: parsed.start_time,
       end_time: parsed.end_time,
-      subject: row.subject || 'Sin nombre',
+      subject: row.subject || '',
       room,
       teacher,
       color: row.color || null,
@@ -411,7 +549,7 @@ async function replaceSchedules(dayId, rows, toast = true) {
 
   state.schedules[dayId] = rows;
   saveLocalState();
-  if (toast) showToast('Horario sincronizado');
+  if (toast) showToastFn(t('sync.scheduleSaved'));
 }
 
 async function setupRealtime() {
@@ -422,8 +560,8 @@ async function setupRealtime() {
     .on('postgres_changes', { event: '*', schema: 'public', table: 'drawings', filter: `user_id=eq.${user.id}` }, handleRemoteChange)
     .on('postgres_changes', { event: '*', schema: 'public', table: 'schedules', filter: `user_id=eq.${user.id}` }, handleRemoteChange)
     .subscribe(status => {
-      if (status === 'SUBSCRIBED') setSyncStatus('Sincronizado', 'success');
-      if (status === 'CHANNEL_ERROR' || status === 'TIMED_OUT') setSyncStatus('Conexión limitada', 'warning');
+      if (status === 'SUBSCRIBED') setSyncStatus(t('sync.synced'), 'success');
+      if (status === 'CHANNEL_ERROR' || status === 'TIMED_OUT') setSyncStatus(t('sync.limited'), 'warning');
     });
 }
 
@@ -432,28 +570,29 @@ function handleRemoteChange(payload) {
   // A local write will also produce a realtime event; the next full reload keeps local and cloud consistent.
   refreshCurrentCloudState(false).catch(error => {
     console.warn('No se pudo refrescar sincronización:', error.message);
-    setSyncStatus('Conexión limitada', 'warning');
+    setSyncStatus(t('sync.limited'), 'warning');
   });
 }
 
 async function refreshCurrentCloudState(showStatus = true) {
-  if (showStatus) setSyncStatus('Actualizando…', 'loading');
+  if (showStatus) setSyncStatus(t('sync.updating'), 'loading');
   const selected = state.selectedDay;
   const local = { ...state };
   await loadCloudState();
   state.selectedDay = selected;
   renderAll();
-  if (showStatus) setSyncStatus('Sincronizado', 'success');
-  else setSyncStatus('Sincronizado', 'success');
+  if (showStatus) setSyncStatus(t('sync.synced'), 'success');
+  else setSyncStatus(t('sync.synced'), 'success');
   if (local.selectedDay !== selected) state.selectedDay = selected;
 }
 
 function scheduleFor(dayId) { return state.schedules[dayId] || []; }
 
+function dayName(dayId) { return t(`day.${dayId}`); }
+function dayShort(dayId) { return t(`day.${dayId}Short`); }
+
 function formatDaySubtitle(dayId) {
-  return ['sat','sun'].includes(dayId)
-    ? 'Pendientes personales, tareas y recordatorios del fin de semana.'
-    : 'Horario universitario, pendientes y notas del día.';
+  return ['sat','sun'].includes(dayId) ? t('day.weekendSubtitle') : t('day.weekSubtitle');
 }
 
 function renderDayButtons() {
@@ -461,7 +600,7 @@ function renderDayButtons() {
     const btn = document.createElement('button');
     btn.type = 'button';
     btn.className = `day-btn ${state.selectedDay === day.id ? 'active' : ''}`;
-    btn.innerHTML = `<span class="short">${day.short}</span><span class="date">${day.name}</span>`;
+    btn.innerHTML = `<span class="short">${dayShort(day.id)}</span><span class="date">${dayName(day.id)}</span>`;
     btn.addEventListener('click', () => selectDay(day.id));
     return btn;
   };
@@ -478,19 +617,19 @@ async function selectDay(dayId) {
 
 function renderSchedule() {
   const rows = scheduleFor(state.selectedDay);
-  els.scheduleCount.textContent = `${rows.length} ${rows.length === 1 ? 'bloque' : 'bloques'}`;
+  els.scheduleCount.textContent = `${rows.length} ${rows.length === 1 ? t('schedule.block') : t('schedule.blocks')}`;
   if (!rows.length) {
-    els.scheduleList.innerHTML = `<div class="empty-state">No hay bloques programados. Usa <strong>Editar horario</strong> para agregar materias, horas o actividades.</div>`;
+    els.scheduleList.innerHTML = `<div class="empty-state">${t('schedule.empty')}</div>`;
     return;
   }
   els.scheduleList.innerHTML = rows.map((row, i) => `
     <div class="schedule-row">
-      <div class="schedule-time">${escapeHtml(row.time || 'Sin hora')}</div>
+      <div class="schedule-time">${escapeHtml(row.time || t('schedule.noTime'))}</div>
       <div>
-        <div class="schedule-subject">${escapeHtml(row.subject || 'Sin nombre')}</div>
+        <div class="schedule-subject">${escapeHtml(row.subject || t('schedule.noName'))}</div>
         ${row.meta ? `<div class="schedule-meta">${escapeHtml(row.meta)}</div>` : ''}
       </div>
-      <button class="tool-btn schedule-edit-inline" data-edit-index="${i}" type="button">Editar</button>
+      <button class="tool-btn schedule-edit-inline" data-edit-index="${i}" type="button">${t('schedule.editInline')}</button>
     </div>
   `).join('');
   els.scheduleList.querySelectorAll('[data-edit-index]').forEach(btn => {
@@ -498,18 +637,66 @@ function renderSchedule() {
   });
 }
 
-function renderNote() {
+function renderNote(preserveEditor = false) {
   const html = state.notes[state.selectedDay] || '';
-  els.noteEditor.innerHTML = html;
+  if (!preserveEditor) els.noteEditor.innerHTML = html;
   const savedFont = state.fonts[state.selectedDay] || 'system';
   els.fontSelect.value = savedFont;
   applyFont(savedFont);
-  markSaved();
+  if (!preserveEditor) markSaved();
 }
 
+const FONT_CLASSES = ['font-system','font-serif','font-mono','font-arial','font-helvetica','font-times','font-garamond','font-trebuchet','font-verdana','font-courier'];
 function applyFont(font) {
-  els.noteEditor.classList.remove('font-system','font-serif','font-mono');
+  els.noteEditor.classList.remove(...FONT_CLASSES);
   els.noteEditor.classList.add(`font-${font}`);
+}
+
+function applySelectedFont(font) {
+  const selection = window.getSelection();
+  if (selection && selection.rangeCount && !selection.isCollapsed && els.noteEditor.contains(selection.anchorNode)) {
+    els.noteEditor.focus();
+    document.execCommand('fontName', false, font === 'system' ? 'Inter' : fontFamilyForCommand(font));
+  } else {
+    applyFont(font);
+  }
+  state.fonts[state.selectedDay] = font;
+  saveCurrentNote(false);
+}
+
+function fontFamilyForCommand(font) {
+  return {
+    serif:'Georgia', mono:'Consolas', arial:'Arial', helvetica:'Helvetica Neue', times:'Times New Roman', garamond:'Garamond', trebuchet:'Trebuchet MS', verdana:'Verdana', courier:'Courier New'
+  }[font] || 'Inter';
+}
+
+function applyTextSize(size) {
+  const selection = window.getSelection();
+  if (!selection || !selection.rangeCount || selection.isCollapsed || !els.noteEditor.contains(selection.anchorNode)) {
+    showToastFn(preferences.language === 'es' ? 'Selecciona el texto al que quieres aplicar el tamaño.' : 'Select the text you want to resize.');
+    return;
+  }
+  els.noteEditor.focus();
+  document.execCommand('fontSize', false, '7');
+  els.noteEditor.querySelectorAll('font[size="7"]').forEach(node => {
+    const span = document.createElement('span');
+    span.style.fontSize = `${size}px`;
+    span.innerHTML = node.innerHTML;
+    node.replaceWith(span);
+  });
+  saveCurrentNote(false);
+}
+
+function applyHighlight() {
+  els.noteEditor.focus();
+  const selection = window.getSelection();
+  if (!selection || !selection.rangeCount || selection.isCollapsed || !els.noteEditor.contains(selection.anchorNode)) {
+    showToastFn(preferences.language === 'es' ? 'Selecciona el texto que quieres resaltar.' : 'Select the text you want to highlight.');
+    return;
+  }
+  document.execCommand('hiliteColor', false, '#fff1a8');
+  els.highlightBtn.classList.add('active');
+  saveCurrentNote(false);
 }
 
 async function saveCurrentNote(showToast = false) {
@@ -523,9 +710,9 @@ async function saveCurrentNote(showToast = false) {
   try {
     await upsertNote(state.selectedDay, content, font, false);
     markSaved();
-    if (showToast) showToastFn('Nota sincronizada');
+    if (showToast) showToastFn(t('sync.noteSaved'));
   } catch (error) {
-    setSyncStatus('Conexión limitada', 'warning');
+    setSyncStatus(t('sync.limited'), 'warning');
     els.saveStatus.textContent = 'Guardado local';
     console.warn('No se pudo guardar nota:', error.message);
   }
@@ -566,14 +753,14 @@ async function saveDrawing(showToast = false) {
   const data = small.toDataURL('image/webp', 0.72);
   state.drawings[state.selectedDay] = data;
   saveLocalState();
-  els.drawingStatus.textContent = 'Guardando…';
+  els.drawingStatus.textContent = t('sync.saving');
   try {
     await upsertDrawing(state.selectedDay, data, false);
-    els.drawingStatus.textContent = 'Sincronizado';
-    if (showToast) showToastFn('Dibujo sincronizado');
+    els.drawingStatus.textContent = t('sync.synced');
+    if (showToast) showToastFn(t('sync.drawingSaved'));
   } catch (error) {
-    setSyncStatus('Conexión limitada', 'warning');
-    els.drawingStatus.textContent = 'Guardado local';
+    setSyncStatus(t('sync.limited'), 'warning');
+    els.drawingStatus.textContent = t('sync.localSaved');
     console.warn('No se pudo guardar dibujo:', error.message);
   }
 }
@@ -625,7 +812,8 @@ function drawTo(x1,y1,x2,y2) {
 function setEraser(next) {
   drawing.erasing = next;
   els.eraserBtn.classList.toggle('active', next);
-  els.eraserBtn.textContent = next ? '✎ Lápiz' : '⌫ Borrador';
+  els.eraserBtn.textContent = next ? '✎ ' + t('drawing.pencil') : '⌫ ' + t('drawing.eraser');
+  els.eraserBtn.title = next ? t('drawing.pencil') : t('drawing.eraser');
 }
 
 async function clearCanvas() {
@@ -653,10 +841,10 @@ function addScheduleFormRow(row = {time:'',subject:'',meta:''}) {
   const wrapper = document.createElement('div');
   wrapper.className = 'schedule-form-row';
   wrapper.innerHTML = `
-    <input class="time-input" aria-label="Hora" placeholder="08:00 - 10:00" value="${escapeAttr(row.time)}">
-    <input class="subject-input" aria-label="Materia o actividad" placeholder="Materia / actividad" value="${escapeAttr(row.subject)}">
-    <input class="meta-input" aria-label="Detalle" placeholder="Aula / detalle" value="${escapeAttr(row.meta)}">
-    <button class="tool-btn remove-row" type="button" title="Eliminar">×</button>
+    <input class="time-input" aria-label="${t('schedule.time')}" placeholder="${t('schedule.timePlaceholder')}" value="${escapeAttr(row.time)}">
+    <input class="subject-input" aria-label="${t('schedule.subject')}" placeholder="${t('schedule.subjectPlaceholder')}" value="${escapeAttr(row.subject)}">
+    <input class="meta-input" aria-label="${t('schedule.detail')}" placeholder="${t('schedule.detailPlaceholder')}" value="${escapeAttr(row.meta)}">
+    <button class="tool-btn remove-row" type="button" title="${t('schedule.remove')}">×</button>
   `;
   wrapper.querySelector('.remove-row').addEventListener('click', () => wrapper.remove());
   els.scheduleRows.appendChild(wrapper);
@@ -674,17 +862,17 @@ async function saveSchedule() {
     .filter(r => r.time || r.subject || r.meta);
   state.schedules[state.selectedDay] = result;
   saveLocalState();
-  setSyncStatus('Guardando…', 'loading');
+  setSyncStatus(t('sync.saving'), 'loading');
   try {
     await replaceSchedules(state.selectedDay, result);
     renderSchedule();
     closeModal();
-    setSyncStatus('Sincronizado', 'success');
+    setSyncStatus(t('sync.synced'), 'success');
   } catch (error) {
     renderSchedule();
     closeModal();
-    setSyncStatus('Conexión limitada', 'warning');
-    showToastFn('Horario guardado localmente; se sincronizará al reconectar.');
+    setSyncStatus(t('sync.limited'), 'warning');
+    showToastFn(t('sync.scheduleLocal'));
     console.warn('No se pudo guardar horario:', error.message);
   }
 }
@@ -705,7 +893,7 @@ function insertChecklist() {
   els.noteEditor.focus();
   const row = document.createElement('div');
   row.className = 'check-item';
-  row.innerHTML = `<input type="checkbox"><span contenteditable="true">Tarea pendiente</span>`;
+  row.innerHTML = `<input type="checkbox"><span contenteditable="true">${t('editor.task')}</span>`;
   const sel = window.getSelection();
   if (sel && sel.rangeCount) {
     const range = sel.getRangeAt(0);
@@ -730,13 +918,13 @@ async function flushCurrentLocalEdits() {
   await Promise.allSettled([saveCurrentNote(false), saveDrawing(false)]);
 }
 
-function renderAll() {
+function renderAll(options = {}) {
   const day = DAYS.find(d => d.id === state.selectedDay) || DAYS[0];
-  els.dayTitle.textContent = day.name;
+  els.dayTitle.textContent = dayName(day.id);
   els.daySubtitle.textContent = formatDaySubtitle(day.id);
   renderDayButtons();
   renderSchedule();
-  renderNote();
+  renderNote(Boolean(options.preserveEditor));
   requestAnimationFrame(renderCanvas);
 }
 
@@ -751,7 +939,7 @@ async function handleLogout() {
   els.authScreen.classList.remove('hidden');
   els.authForm.reset();
   setAuthMode('login');
-  showAuthMessage('Sesión cerrada.');
+  showAuthMessage(t('auth.loggedOut'));
 }
 
 // Auth events
@@ -759,6 +947,13 @@ els.loginTab.addEventListener('click', () => setAuthMode('login'));
 els.signupTab.addEventListener('click', () => setAuthMode('signup'));
 els.authForm.addEventListener('submit', handleAuthSubmit);
 els.logoutBtn.addEventListener('click', handleLogout);
+els.settingsBtn.addEventListener('click', openSettings);
+els.closeSettingsBtn.addEventListener('click', closeSettings);
+els.closeSettingsFooterBtn.addEventListener('click', closeSettings);
+els.settingsModal.addEventListener('click', ev => { if (ev.target.dataset.closeSettings) closeSettings(); });
+els.languageSelect.addEventListener('change', () => changePreferences({ language: els.languageSelect.value }));
+els.lightModeBtn.addEventListener('click', () => changePreferences({ theme:'light' }));
+els.darkModeBtn.addEventListener('click', () => changePreferences({ theme:'dark' }));
 
 // Text editor events
 els.noteEditor.addEventListener('input', () => {
@@ -773,10 +968,9 @@ document.querySelectorAll('[data-command]').forEach(btn => {
     saveCurrentNote(false);
   });
 });
-els.fontSelect.addEventListener('change', () => {
-  applyFont(els.fontSelect.value);
-  saveCurrentNote(false);
-});
+els.fontSelect.addEventListener('change', () => applySelectedFont(els.fontSelect.value));
+els.fontSizeSelect.addEventListener('change', () => applyTextSize(Number(els.fontSizeSelect.value)));
+els.highlightBtn.addEventListener('click', applyHighlight);
 els.checklistBtn.addEventListener('click', insertChecklist);
 
 // Drawing events
@@ -788,7 +982,7 @@ els.canvas.addEventListener('pointerleave', endDraw);
 els.brushSize.addEventListener('input', () => els.brushSizeValue.textContent = els.brushSize.value);
 els.eraserBtn.addEventListener('click', () => setEraser(!drawing.erasing));
 els.clearCanvasBtn.addEventListener('click', async () => {
-  if (confirm('¿Limpiar todo el dibujo de este día?')) await clearCanvas();
+  if (confirm(t('drawing.confirm'))) await clearCanvas();
 });
 
 // Schedule modal
@@ -801,7 +995,7 @@ els.closeModalBtn.addEventListener('click', closeModal);
 els.scheduleModal.addEventListener('click', (ev) => {
   if (ev.target.dataset.closeModal) closeModal();
 });
-document.addEventListener('keydown', (ev) => { if (ev.key === 'Escape') closeModal(); });
+document.addEventListener('keydown', (ev) => { if (ev.key === 'Escape') { closeModal(); closeSettings(); } });
 
 // PWA install flow
 window.addEventListener('beforeinstallprompt', (event) => {
@@ -811,7 +1005,7 @@ window.addEventListener('beforeinstallprompt', (event) => {
 });
 els.installBtn.addEventListener('click', async () => {
   if (!deferredInstallPrompt) {
-    showToastFn('En Chrome: menú ⋮ → Instalar aplicación');
+    showToastFn(t('pwa.installHint'));
     return;
   }
   deferredInstallPrompt.prompt();
@@ -819,7 +1013,7 @@ els.installBtn.addEventListener('click', async () => {
   deferredInstallPrompt = null;
 });
 window.addEventListener('appinstalled', () => {
-  showToastFn('Noti instalada');
+  showToastFn(t('pwa.installed'));
   els.installBtn.style.display = 'none';
 });
 
@@ -832,6 +1026,9 @@ window.addEventListener('resize', () => {
 });
 
 async function init() {
+  fillFontSizes();
+  preferences = normalizePreferences({ ...DEFAULT_PREFERENCES, ...(loadLocalState().preferences || {}) });
+  applyPreferences();
   setAuthMode('login');
   const { data } = await supabaseClient.auth.getSession();
   if (data.session?.user) {
@@ -839,8 +1036,8 @@ async function init() {
       await bootstrapUser(data.session.user);
     } catch (error) {
       console.error(error);
-      setSyncStatus('Error de conexión', 'warning');
-      showAuthMessage('No se pudo cargar tu información. Revisa la conexión e inténtalo de nuevo.', 'error');
+      setSyncStatus(t('sync.error'), 'warning');
+      showAuthMessage(t('auth.loadError'), 'error');
       els.appScreen.classList.add('hidden');
       els.authScreen.classList.remove('hidden');
     }
