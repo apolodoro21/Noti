@@ -90,7 +90,7 @@ function cloneDefault() {
   return JSON.parse(JSON.stringify(DEFAULT_STATE));
 }
 
-const APP_VERSION = '3.0';
+const APP_VERSION = '3.01';
 const DEFAULT_PREFERENCES = { language: 'es', theme: 'dark', palette: 'blue' };
 const PALETTES = [
   { id:'blue', name:{es:'Azul suave',en:'Soft blue'}, colors:['#7aa7f8','#8f82e8'] },
