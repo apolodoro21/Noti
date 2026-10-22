@@ -7,11 +7,11 @@
   <meta name="description" content="Noti: horarios, notas, pendientes y dibujo sincronizados entre tus dispositivos.">
   <link rel="manifest" href="manifest.webmanifest">
   <link rel="icon" href="icons/icon.svg" type="image/svg+xml">
-  <link rel="stylesheet" href="styles.css">
+  <link rel="stylesheet" href="styles.css?v=0.4.0">
   <title>Noti</title>
 </head>
 <body>
-  <div id="versionBadge" class="version-badge" aria-label="Versión de Noti">v3.02</div>
+  <div id="versionBadge" class="version-badge" aria-label="Versión de Noti">v0.4.0</div>
 
   <div id="authScreen" class="auth-screen">
     <div class="auth-card card">
@@ -62,25 +62,44 @@
       </div>
     </header>
 
-    <main>
-      <section class="day-strip" aria-label="Seleccionar día">
-        <div class="day-group">
-          <span class="group-label" data-i18n="day.week">Semana</span>
-          <div id="weekdayButtons" class="day-buttons"></div>
+    <div id="migrationBanner" class="notice hidden" role="status"></div>
+
+    <main id="calendarView">
+      <section class="card calendar-card" aria-label="Calendario">
+        <div class="cal-head">
+          <div>
+            <span class="muted" data-i18n="cal.label">CALENDARIO</span>
+            <h2 id="calTitle" aria-live="polite">Octubre 2026</h2>
+          </div>
+          <div class="cal-nav">
+            <button id="calPrev" class="icon-btn" type="button" aria-label="Mes anterior" title="Mes anterior">‹</button>
+            <button id="calToday" class="secondary-btn" type="button" data-i18n="cal.today">Hoy</button>
+            <button id="calNext" class="icon-btn" type="button" aria-label="Mes siguiente" title="Mes siguiente">›</button>
+          </div>
         </div>
-        <div class="day-group weekend-group">
-          <span class="group-label" data-i18n="day.weekend">Fin de semana</span>
-          <div id="weekendButtons" class="day-buttons"></div>
+        <div class="cal-groups" aria-hidden="true">
+          <span class="group-label" data-i18n="day.week">Semana</span>
+          <span class="group-label weekend-label" data-i18n="day.weekend">Fin de semana</span>
+        </div>
+        <div id="calWeekdays" class="cal-grid cal-weekdays" aria-hidden="true"></div>
+        <div id="calGrid" class="cal-grid" role="grid"></div>
+        <div class="cal-legend" aria-hidden="true">
+          <span><i class="dot dot-note"></i><span data-i18n="cal.legendNote">Nota</span></span>
+          <span><i class="dot dot-draw"></i><span data-i18n="cal.legendDraw">Dibujo</span></span>
+          <span><i class="dot dot-sched"></i><span data-i18n="cal.legendSched">Horario</span></span>
         </div>
       </section>
 
-      <section class="day-heading card">
+      <section class="day-heading card" id="agendaCard">
         <div>
           <span class="muted" data-i18n="day.sheet">HOJA DEL DÍA</span>
           <h2 id="dayTitle">Lunes</h2>
-          <p id="daySubtitle">Horario universitario, pendientes y notas.</p>
+          <p id="daySubtitle"></p>
         </div>
-        <button id="editScheduleBtn" class="secondary-btn" type="button" data-i18n="schedule.edit">Editar horario</button>
+        <div class="agenda-actions">
+          <button id="openDayBtn" class="primary-btn" type="button" data-i18n="ws.open">Abrir día</button>
+          <button id="editScheduleBtn" class="secondary-btn" type="button" data-i18n="schedule.add">+ Actividad</button>
+        </div>
       </section>
 
       <section id="scheduleSection" class="card">
@@ -93,71 +112,86 @@
         </div>
         <div id="scheduleList" class="schedule-list"></div>
       </section>
+    </main>
 
-      <section class="workspace-grid">
-        <article class="card editor-card">
-          <div class="section-head">
+    <footer class="footer-note" data-i18n="footer">Noti sincroniza tus datos con tu cuenta y mantiene una copia local para trabajar con mayor resiliencia.</footer>
+
+    <section id="workspace" class="workspace" data-mode="write" aria-hidden="true" role="dialog" aria-modal="true" aria-labelledby="wsDate" inert>
+      <header class="ws-top">
+        <button id="wsBack" class="secondary-btn ws-back" type="button" aria-label="Volver al calendario"><span aria-hidden="true">‹</span> <span data-i18n="ws.back">Calendario</span></button>
+        <div class="ws-title">
+          <span id="wsWeekday" class="muted"></span>
+          <h2 id="wsDate"></h2>
+        </div>
+        <div class="ws-day-nav">
+          <button id="wsPrevDay" class="icon-btn" type="button" aria-label="Día anterior" title="Día anterior">‹</button>
+          <button id="wsNextDay" class="icon-btn" type="button" aria-label="Día siguiente" title="Día siguiente">›</button>
+        </div>
+      </header>
+
+      <div id="wsSchedule" class="ws-schedule" aria-label="Horario del día"></div>
+
+      <div id="wsStage" class="ws-stage">
+        <div id="canvasWrap" class="canvas-wrap"><canvas id="drawingCanvas" aria-label="Lienzo para dibujar"></canvas></div>
+
+        <article id="notePanel" class="note-panel card">
+          <div class="note-head">
             <div>
               <span class="muted" data-i18n="notes.label">NOTAS</span>
               <h3 data-i18n="notes.title">Apuntes del día</h3>
             </div>
             <span id="saveStatus" class="save-status">Sin cambios</span>
           </div>
-
-          <div class="toolbar" role="toolbar" aria-label="Herramientas de texto">
-            <select id="fontSelect" aria-label="Tipografía" title="Tipografía">
-              <option value="system">Sans-serif</option>
-              <option value="serif">Serif</option>
-              <option value="mono">Monoespaciada</option>
-              <option value="arial">Arial</option>
-              <option value="helvetica">Helvetica</option>
-              <option value="times">Times New Roman</option>
-              <option value="garamond">Garamond</option>
-              <option value="trebuchet">Trebuchet MS</option>
-              <option value="verdana">Verdana</option>
-              <option value="courier">Courier New</option>
-            </select>
-            <select id="fontSizeSelect" aria-label="Tamaño del texto" title="Tamaño del texto"></select>
-            <button class="tool-btn" data-command="bold" type="button" title="Negrita" aria-label="Negrita"><strong>B</strong></button>
-            <button id="highlightBtn" class="tool-btn" type="button" title="Resaltador" aria-label="Resaltador">🖍</button>
-            <button class="tool-btn" data-command="strikeThrough" type="button" title="Tachado" aria-label="Tachado"><s>S</s></button>
-            <button id="checklistBtn" class="tool-btn" type="button" title="Añadir checklist" aria-label="Añadir checklist">☑</button>
-          </div>
-
+          <div id="legacyBanner" class="legacy-banner hidden"></div>
           <div id="noteEditor" class="note-editor font-system" contenteditable="true" data-placeholder="Escribe aquí tus apuntes, tareas, ideas o recordatorios..."></div>
         </article>
+        <button id="noteRestore" class="secondary-btn note-restore hidden" type="button">📝 <span data-i18n="notes.label">NOTAS</span></button>
+      </div>
 
-        <article class="card drawing-card">
-          <div class="section-head">
-            <div>
-              <span class="muted" data-i18n="drawing.label">LIENZO</span>
-              <h3 data-i18n="drawing.title">Dibujo a mano alzada</h3>
-            </div>
-            <span id="drawingStatus" class="save-status">Sin cambios</span>
-          </div>
+      <div id="wsDock" class="ws-dock card" role="toolbar" aria-label="Herramientas">
+        <div class="mode-switch" role="group" aria-label="Modo">
+          <button id="modeWrite" class="tool-btn mode-btn active" type="button" data-mode="write" aria-pressed="true"><span aria-hidden="true">Aa</span> <span data-i18n="ws.write">Escribir</span></button>
+          <button id="modeDraw" class="tool-btn mode-btn" type="button" data-mode="draw" aria-pressed="false"><span aria-hidden="true">✎</span> <span data-i18n="ws.draw">Dibujar</span></button>
+        </div>
+        <span class="dock-sep" aria-hidden="true"></span>
 
-          <div class="drawing-toolbar">
-            <label class="color-picker" title="Color">
-              <span data-i18n="drawing.color">Color</span>
-              <input id="brushColor" type="color" value="#e8edf2">
-            </label>
-            <label class="size-control" title="Grosor">
-              <span data-i18n="drawing.size">Grosor</span>
-              <input id="brushSize" type="range" min="1" max="32" value="5">
-              <output id="brushSizeValue">5</output>
-            </label>
-            <button id="eraserBtn" class="tool-btn" type="button" title="Borrador">⌫</button>
-            <button id="clearCanvasBtn" class="danger-outline" type="button" data-i18n="drawing.clear">Limpiar</button>
-          </div>
+        <div id="textTools" class="dock-tools">
+          <select id="fontSelect" aria-label="Tipografía" title="Tipografía">
+            <option value="system">Sans-serif</option>
+            <option value="serif">Serif</option>
+            <option value="mono">Monoespaciada</option>
+            <option value="arial">Arial</option>
+            <option value="helvetica">Helvetica</option>
+            <option value="times">Times New Roman</option>
+            <option value="garamond">Garamond</option>
+            <option value="trebuchet">Trebuchet MS</option>
+            <option value="verdana">Verdana</option>
+            <option value="courier">Courier New</option>
+          </select>
+          <select id="fontSizeSelect" aria-label="Tamaño del texto" title="Tamaño del texto"></select>
+          <button class="tool-btn" data-command="bold" type="button" title="Negrita" aria-label="Negrita"><strong>B</strong></button>
+          <button id="highlightBtn" class="tool-btn" type="button" title="Resaltador" aria-label="Resaltador">🖍</button>
+          <button class="tool-btn" data-command="strikeThrough" type="button" title="Tachado" aria-label="Tachado"><s>S</s></button>
+          <button id="checklistBtn" class="tool-btn" type="button" title="Añadir checklist" aria-label="Añadir checklist">☑</button>
+          <button id="centerNoteBtn" class="tool-btn" type="button" aria-pressed="false" title="Centrar nota" aria-label="Centrar nota">⤢</button>
+        </div>
 
-          <div class="canvas-wrap">
-            <canvas id="drawingCanvas" aria-label="Lienzo para dibujar"></canvas>
-          </div>
-        </article>
-      </section>
-    </main>
-
-    <footer class="footer-note" data-i18n="footer">Noti sincroniza tus datos con tu cuenta y mantiene una copia local para trabajar con mayor resiliencia.</footer>
+        <div id="drawTools" class="dock-tools hidden">
+          <label class="color-picker" title="Color">
+            <span data-i18n="drawing.color">Color</span>
+            <input id="brushColor" type="color" value="#e8edf2">
+          </label>
+          <label class="size-control" title="Grosor">
+            <span data-i18n="drawing.size">Grosor</span>
+            <input id="brushSize" type="range" min="1" max="32" value="5">
+            <output id="brushSizeValue">5</output>
+          </label>
+          <button id="eraserBtn" class="tool-btn" type="button" title="Borrador">⌫</button>
+          <button id="clearCanvasBtn" class="danger-outline" type="button" data-i18n="drawing.clear">Limpiar</button>
+          <span id="drawingStatus" class="save-status">Sin cambios</span>
+        </div>
+      </div>
+    </section>
   </div>
 
   <div id="scheduleModal" class="modal hidden" role="dialog" aria-modal="true" aria-labelledby="modalTitle">
@@ -165,17 +199,46 @@
     <div class="modal-card">
       <div class="modal-head">
         <div>
-          <span class="muted" data-i18n="schedule.config">CONFIGURACIÓN</span>
-          <h2 id="modalTitle" data-i18n="schedule.modalTitle">Editar horario</h2>
+          <span class="muted" id="modalDateLabel" data-i18n="schedule.config">CONFIGURACIÓN</span>
+          <h2 id="modalTitle" data-i18n="schedule.modalTitle">Actividad</h2>
         </div>
         <button id="closeModalBtn" class="icon-btn" type="button" aria-label="Cerrar">×</button>
       </div>
-      <p class="modal-help" data-i18n="schedule.help">Agrega las materias o actividades de este día. Puedes dejar filas vacías.</p>
-      <div id="scheduleRows" class="schedule-form"></div>
-      <button id="addScheduleRowBtn" class="secondary-btn full-btn" type="button" data-i18n="schedule.addBlock">+ Agregar bloque</button>
+
+      <div id="scopeBox" class="scope-box hidden">
+        <span class="settings-label" data-i18n="sch.scope">¿A qué ocurrencias se aplica?</span>
+        <label class="radio-row"><input type="radio" name="scope" value="one" checked><span data-i18n="sch.scopeOne">Solo esta fecha</span></label>
+        <label class="radio-row"><input type="radio" name="scope" value="following"><span data-i18n="sch.scopeFollowing">Esta y las siguientes</span></label>
+        <label class="radio-row"><input type="radio" name="scope" value="series"><span data-i18n="sch.scopeSeries">Toda la serie</span></label>
+      </div>
+
+      <div id="kindBox" class="segmented-control">
+        <button id="kindRecurring" class="secondary-btn active" type="button" data-kind="recurring" data-i18n="sch.recurring">Se repite cada semana</button>
+        <button id="kindSingle" class="secondary-btn" type="button" data-kind="single" data-i18n="sch.single">Solo una fecha</button>
+      </div>
+
+      <div class="schedule-form">
+        <label class="field"><span data-i18n="schedule.subject">Materia o actividad</span>
+          <input id="schSubject" type="text" placeholder="Materia / actividad" data-i18n-placeholder="schedule.subjectPlaceholder"></label>
+        <label class="field"><span data-i18n="schedule.detail">Aula / detalle</span>
+          <input id="schMeta" type="text" placeholder="Aula / detalle" data-i18n-placeholder="schedule.detailPlaceholder"></label>
+        <div class="two-cols">
+          <label class="field"><span data-i18n="sch.from">Desde</span><input id="schStart" type="time"></label>
+          <label class="field"><span data-i18n="sch.to">Hasta</span><input id="schEnd" type="time"></label>
+        </div>
+        <div id="weekdaysBox" class="field"><span data-i18n="sch.days">Días de la semana</span><div id="weekdayChips" class="chip-row"></div></div>
+        <div id="rangeBox" class="two-cols">
+          <label class="field"><span data-i18n="sch.startDate">Fecha de inicio</span><input id="schStartDate" type="date"></label>
+          <label class="field"><span data-i18n="sch.endDate">Fecha de fin (opcional)</span><input id="schEndDate" type="date"></label>
+        </div>
+        <label id="singleBox" class="field hidden"><span data-i18n="sch.date">Fecha</span><input id="schSingleDate" type="date"></label>
+      </div>
+      <p id="schError" class="auth-message error" role="alert"></p>
       <div class="modal-actions">
+        <button id="deleteScheduleBtn" class="danger-outline hidden" type="button" data-i18n="sch.delete">Eliminar</button>
+        <span class="spacer"></span>
         <button id="cancelScheduleBtn" class="secondary-btn" type="button" data-i18n="common.cancel">Cancelar</button>
-        <button id="saveScheduleBtn" class="primary-btn" type="button" data-i18n="common.save">Guardar horario</button>
+        <button id="saveScheduleBtn" class="primary-btn" type="button" data-i18n="sch.save">Guardar</button>
       </div>
     </div>
   </div>
@@ -224,6 +287,7 @@
   <div id="toast" class="toast" role="status" aria-live="polite"></div>
 
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-  <script src="app.js"></script>
+  <script src="noti-core.js?v=0.4.0"></script>
+  <script src="app.js?v=0.4.0"></script>
 </body>
 </html>

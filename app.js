@@ -1,96 +1,55 @@
+/* Noti 0.4.0 — calendario real, espacio diario y horarios recurrentes.
+   Basado en Noti 3.0 (mismo Supabase, auth, preferencias, i18n y editor). */
 const SUPABASE_URL = 'https://ueyakwaxvotartkcnyhj.supabase.co';
-const SUPABASE_PUBLISHABLE_KEY = 'sb_publishable_GHLYL_7tgXlpsgB5b7rl5Q_qQ_a-Eai';
+const SUPABASE_PUBLISHABLE_KEY = 'sb_publishable_GHLYL_7tgXlpsgB5b7rl5Q_qQ_a-Eai'; // clave pública (anon): la seguridad la imponen las políticas RLS
 const supabaseClient = window.supabase.createClient(SUPABASE_URL, SUPABASE_PUBLISHABLE_KEY, {
   auth: { persistSession: true, autoRefreshToken: true, detectSessionInUrl: true }
 });
+const C = window.NotiCore;
+const APP_VERSION = '0.4.0';
+const CANVAS_W = 1600, CANVAS_H = 1200;           // superficie lógica fija: el dibujo es idéntico en cualquier dispositivo
+const EXPORT_W = 1200, EXPORT_H = 900;
 
 const DAYS = [
-  { id: 'mon', db: 1, name: 'Lunes', short: 'Lun' },
-  { id: 'tue', db: 2, name: 'Martes', short: 'Mar' },
-  { id: 'wed', db: 3, name: 'Miércoles', short: 'Mié' },
-  { id: 'thu', db: 4, name: 'Jueves', short: 'Jue' },
-  { id: 'fri', db: 5, name: 'Viernes', short: 'Vie' },
-  { id: 'sat', db: 6, name: 'Sábado', short: 'Sáb' },
-  { id: 'sun', db: 7, name: 'Domingo', short: 'Dom' }
+  { id: 'mon', db: 1 }, { id: 'tue', db: 2 }, { id: 'wed', db: 3 }, { id: 'thu', db: 4 },
+  { id: 'fri', db: 5 }, { id: 'sat', db: 6 }, { id: 'sun', db: 7 }
 ];
-
-const DEFAULT_STATE = {
-  selectedDay: 'mon',
-  notes: {},
-  drawings: {},
-  fonts: {},
-  preferences: null,
-  schedules: Object.fromEntries(DAYS.map(d => [d.id, []]))
-};
+const dayIdOf = iso => DAYS[C.dbWeekday(iso) - 1].id;
 
 let user = null;
-let state = cloneDefault();
+let state = newState();
 let realtimeChannel = null;
 let deferredInstallPrompt = null;
-let drawing = { active:false, erasing:false, lastX:0, lastY:0, dpr:1 };
 let initialized = false;
 let authMode = 'login';
-let initialLocalSnapshot = null;
-let cloudSnapshotExists = false;
+let currentDate = null;        // fecha cargada en el espacio diario
+let wsOpen = false, wsPushed = false, savedRange = null;
+let flushing = false, flushTimer = null, syncFailed = false;
+const drawing = { active:false, erasing:false, lastX:0, lastY:0, dirty:false, hasInk:false, token:0, colorTouched:false, timer:null };
 
-const els = {
-  authScreen: document.getElementById('authScreen'),
-  appScreen: document.getElementById('appScreen'),
-  authForm: document.getElementById('authForm'),
-  authName: document.getElementById('authName'),
-  nameField: document.getElementById('nameField'),
-  authEmail: document.getElementById('authEmail'),
-  authPassword: document.getElementById('authPassword'),
-  authSubmit: document.getElementById('authSubmit'),
-  authMessage: document.getElementById('authMessage'),
-  loginTab: document.getElementById('loginTab'),
-  signupTab: document.getElementById('signupTab'),
-  welcomeLine: document.getElementById('welcomeLine'),
-  syncStatus: document.getElementById('syncStatus'),
-  drawingStatus: document.getElementById('drawingStatus'),
-  logoutBtn: document.getElementById('logoutBtn'),
-  settingsBtn: document.getElementById('settingsBtn'),
-  settingsModal: document.getElementById('settingsModal'),
-  closeSettingsBtn: document.getElementById('closeSettingsBtn'),
-  closeSettingsFooterBtn: document.getElementById('closeSettingsFooterBtn'),
-  languageSelect: document.getElementById('languageSelect'),
-  lightModeBtn: document.getElementById('lightModeBtn'),
-  darkModeBtn: document.getElementById('darkModeBtn'),
-  paletteOptions: document.getElementById('paletteOptions'),
-  settingsSaveStatus: document.getElementById('settingsSaveStatus'),
-  weekdayButtons: document.getElementById('weekdayButtons'),
-  weekendButtons: document.getElementById('weekendButtons'),
-  dayTitle: document.getElementById('dayTitle'),
-  daySubtitle: document.getElementById('daySubtitle'),
-  scheduleList: document.getElementById('scheduleList'),
-  scheduleCount: document.getElementById('scheduleCount'),
-  noteEditor: document.getElementById('noteEditor'),
-  fontSelect: document.getElementById('fontSelect'),
-  fontSizeSelect: document.getElementById('fontSizeSelect'),
-  highlightBtn: document.getElementById('highlightBtn'),
-  checklistBtn: document.getElementById('checklistBtn'),
-  saveStatus: document.getElementById('saveStatus'),
-  canvas: document.getElementById('drawingCanvas'),
-  brushColor: document.getElementById('brushColor'),
-  brushSize: document.getElementById('brushSize'),
-  brushSizeValue: document.getElementById('brushSizeValue'),
-  eraserBtn: document.getElementById('eraserBtn'),
-  clearCanvasBtn: document.getElementById('clearCanvasBtn'),
-  installBtn: document.getElementById('installBtn'),
-  scheduleModal: document.getElementById('scheduleModal'),
-  scheduleRows: document.getElementById('scheduleRows'),
-  addScheduleRowBtn: document.getElementById('addScheduleRowBtn'),
-  saveScheduleBtn: document.getElementById('saveScheduleBtn'),
-  cancelScheduleBtn: document.getElementById('cancelScheduleBtn'),
-  closeModalBtn: document.getElementById('closeModalBtn'),
-  toast: document.getElementById('toast')
-};
-
-function cloneDefault() {
-  return JSON.parse(JSON.stringify(DEFAULT_STATE));
+function newState() {
+  const today = C.todayISO();
+  const d = C.parseISO(today);
+  return { selectedDate: today, viewYear: d.getFullYear(), viewMonth: d.getMonth(), followToday: true,
+    notes: {}, drawings: {}, drawingIndex: {}, items: [], exceptions: [], queue: [],
+    legacy: { notes:{}, drawings:{}, fonts:{} }, cloudReady: true };
 }
 
-const APP_VERSION = '3.02';
+const $ = id => document.getElementById(id);
+const els = {};
+['authScreen','appScreen','authForm','authName','nameField','authEmail','authPassword','authSubmit','authMessage','loginTab','signupTab',
+ 'welcomeLine','syncStatus','drawingStatus','logoutBtn','settingsBtn','settingsModal','closeSettingsBtn','closeSettingsFooterBtn','languageSelect',
+ 'lightModeBtn','darkModeBtn','paletteOptions','settingsSaveStatus','dayTitle','daySubtitle','scheduleList','scheduleCount','noteEditor','fontSelect',
+ 'fontSizeSelect','highlightBtn','checklistBtn','saveStatus','brushColor','brushSize','brushSizeValue','eraserBtn','clearCanvasBtn','installBtn',
+ 'scheduleModal','closeModalBtn','toast','calTitle','calGrid','calWeekdays','calPrev','calNext','calToday','openDayBtn','editScheduleBtn',
+ 'workspace','wsBack','wsWeekday','wsDate','wsPrevDay','wsNextDay','wsSchedule','wsStage','canvasWrap','notePanel','noteRestore','legacyBanner',
+ 'modeWrite','modeDraw','textTools','drawTools','centerNoteBtn','migrationBanner','versionBadge',
+ 'scopeBox','kindBox','schSubject','schMeta','schStart','schEnd','weekdaysBox','weekdayChips','rangeBox','schStartDate','schEndDate','singleBox',
+ 'schSingleDate','schError','deleteScheduleBtn','cancelScheduleBtn','saveScheduleBtn','modalTitle','modalDateLabel'
+].forEach(id => { els[id] = $(id); });
+els.canvas = $('drawingCanvas');
+els.versionBadge.textContent = `v${APP_VERSION}`;
+
 const DEFAULT_PREFERENCES = { language: 'es', theme: 'dark', palette: 'blue' };
 const PALETTES = [
   { id:'blue', name:{es:'Azul suave',en:'Soft blue'}, colors:['#7aa7f8','#8f82e8'] },
@@ -129,6 +88,38 @@ const I18N = {
   }
 };
 
+
+// ---- Traducciones nuevas de 0.4.0 (se fusionan con las de 3.0) ----
+const I18N_V4 = {
+  es: {
+    'cal.label':'CALENDARIO','cal.today':'Hoy','cal.prev':'Mes anterior','cal.next':'Mes siguiente','cal.legendNote':'Nota','cal.legendDraw':'Dibujo','cal.legendSched':'Horario',
+    'ws.open':'Abrir día','ws.back':'Calendario','ws.backAria':'Volver al calendario','ws.write':'Escribir','ws.draw':'Dibujar','ws.center':'Centrar nota','ws.uncenter':'Devolver nota al lienzo','ws.prevDay':'Día anterior','ws.nextDay':'Día siguiente','ws.schedule':'Horario del día','ws.addChip':'+ Actividad',
+    'schedule.add':'+ Actividad','sch.newTitle':'Nueva actividad','sch.editTitle':'Editar actividad','sch.scope':'¿A qué ocurrencias se aplica?','sch.scopeOne':'Solo esta fecha','sch.scopeFollowing':'Esta y las siguientes','sch.scopeSeries':'Toda la serie',
+    'sch.recurring':'Se repite cada semana','sch.single':'Solo una fecha','sch.from':'Desde','sch.to':'Hasta','sch.days':'Días de la semana','sch.startDate':'Fecha de inicio','sch.endDate':'Fecha de fin (opcional)','sch.date':'Fecha','sch.delete':'Eliminar','sch.save':'Guardar',
+    'sch.errSubject':'Escribe el nombre de la actividad.','sch.errDays':'Selecciona al menos un día de la semana.','sch.errRange':'La fecha de fin no puede ser anterior a la de inicio.','sch.errDate':'Selecciona una fecha válida.','sch.errTime':'La hora final debe ser posterior a la inicial.',
+    'sch.saved':'Actividad guardada','sch.deleted':'Actividad eliminada','sch.deleteConfirmSeries':'¿Eliminar toda la serie, incluidas las fechas pasadas?','sch.deleteConfirmFollowing':'¿Eliminar esta fecha y las siguientes? Las anteriores se conservan.','sch.deleteConfirmSingle':'¿Eliminar esta actividad?',
+    'sch.tagSingle':'Fecha única','sch.tagChanged':'Modificada solo hoy','sch.tagRepeats':'Semanal',
+    'legacy.note':'Hay una nota de Noti 3.0 guardada para los {day}.','legacy.drawing':'Hay un dibujo de Noti 3.0 guardado para los {day}.','legacy.importNote':'Importar nota aquí','legacy.importDrawing':'Importar dibujo aquí','legacy.imported':'Importado a esta fecha',
+    'sync.pending':'Pendiente de sincronizar','sync.offlineQueued':'Sin conexión: tus cambios están guardados y se enviarán al reconectar.','sync.storageFull':'El almacenamiento del navegador está lleno; este dibujo solo se conserva en la nube.',
+    'sync.migrationNeeded':'Falta ejecutar SUPABASE_MIGRACION_0.4.0.sql en Supabase. Mientras tanto Noti guarda todo en este dispositivo y lo subirá cuando la migración esté aplicada.',
+    'drawing.loading':'Cargando…','notes.selectSize':'Selecciona el texto al que quieres aplicar el tamaño.','notes.selectHighlight':'Selecciona el texto que quieres resaltar.','day.fullDate':'{weekday}, {date}'
+  },
+  en: {
+    'cal.label':'CALENDAR','cal.today':'Today','cal.prev':'Previous month','cal.next':'Next month','cal.legendNote':'Note','cal.legendDraw':'Drawing','cal.legendSched':'Schedule',
+    'ws.open':'Open day','ws.back':'Calendar','ws.backAria':'Back to calendar','ws.write':'Write','ws.draw':'Draw','ws.center':'Center note','ws.uncenter':'Return note to canvas','ws.prevDay':'Previous day','ws.nextDay':'Next day','ws.schedule':'Day schedule','ws.addChip':'+ Activity',
+    'schedule.add':'+ Activity','sch.newTitle':'New activity','sch.editTitle':'Edit activity','sch.scope':'Which occurrences does this apply to?','sch.scopeOne':'Only this date','sch.scopeFollowing':'This and following','sch.scopeSeries':'Entire series',
+    'sch.recurring':'Repeats weekly','sch.single':'Single date','sch.from':'From','sch.to':'To','sch.days':'Days of the week','sch.startDate':'Start date','sch.endDate':'End date (optional)','sch.date':'Date','sch.delete':'Delete','sch.save':'Save',
+    'sch.errSubject':'Enter the activity name.','sch.errDays':'Select at least one weekday.','sch.errRange':'The end date cannot be before the start date.','sch.errDate':'Select a valid date.','sch.errTime':'The end time must be after the start time.',
+    'sch.saved':'Activity saved','sch.deleted':'Activity deleted','sch.deleteConfirmSeries':'Delete the entire series, including past dates?','sch.deleteConfirmFollowing':'Delete this date and the following ones? Earlier dates are kept.','sch.deleteConfirmSingle':'Delete this activity?',
+    'sch.tagSingle':'Single date','sch.tagChanged':'Changed for this date','sch.tagRepeats':'Weekly',
+    'legacy.note':'There is a Noti 3.0 note saved for {day}.','legacy.drawing':'There is a Noti 3.0 drawing saved for {day}.','legacy.importNote':'Import note here','legacy.importDrawing':'Import drawing here','legacy.imported':'Imported into this date',
+    'sync.pending':'Pending sync','sync.offlineQueued':'Offline: your changes are saved and will be sent when you reconnect.','sync.storageFull':'Browser storage is full; this drawing is only kept in the cloud.',
+    'sync.migrationNeeded':'SUPABASE_MIGRACION_0.4.0.sql has not been run in Supabase yet. Meanwhile Noti keeps everything on this device and will upload it once the migration is applied.',
+    'drawing.loading':'Loading…','notes.selectSize':'Select the text you want to resize.','notes.selectHighlight':'Select the text you want to highlight.','day.fullDate':'{weekday}, {date}'
+  }
+};
+['es','en'].forEach(l => Object.assign(I18N[l], I18N_V4[l]));
+
 let preferences = { ...DEFAULT_PREFERENCES };
 let preferencesLoadedFromCloud = false;
 
@@ -137,6 +128,14 @@ function t(key, vars = {}) {
   Object.entries(vars).forEach(([name, replacement]) => { value = value.replaceAll(`{${name}}`, replacement); });
   return value;
 }
+const locale = () => preferences.language === 'en' ? 'en-US' : 'es-CO';
+const dayName = id => t(`day.${id}`);
+const dayShort = id => t(`day.${id}Short`);
+function fmtLong(iso) {
+  const d = C.parseISO(iso);
+  return new Intl.DateTimeFormat(locale(), { day:'numeric', month:'long', year:'numeric' }).format(d);
+}
+function fmtFull(iso) { return t('day.fullDate', { weekday: dayName(dayIdOf(iso)), date: fmtLong(iso) }); }
 
 function normalizePreferences(value) {
   const next = { ...DEFAULT_PREFERENCES, ...(value || {}) };
@@ -162,20 +161,23 @@ function applyPreferences() {
   els.highlightBtn.setAttribute('aria-label', t('editor.highlight'));
   els.eraserBtn.title = drawing.erasing ? t('drawing.pencil') : t('drawing.eraser');
   els.clearCanvasBtn.title = t('drawing.clear');
-  els.installBtn.title = t('pwa.install');
-  els.installBtn.setAttribute('aria-label', t('pwa.install'));
-  els.logoutBtn.title = t('auth.logout');
-  els.logoutBtn.setAttribute('aria-label', t('auth.logout'));
+  els.installBtn.title = t('pwa.install'); els.installBtn.setAttribute('aria-label', t('pwa.install'));
+  els.logoutBtn.title = t('auth.logout'); els.logoutBtn.setAttribute('aria-label', t('auth.logout'));
+  els.settingsBtn.title = t('settings.title');
   document.querySelectorAll('[aria-label="Cerrar"]').forEach(el => el.setAttribute('aria-label', t('common.close')));
+  [['calPrev','cal.prev'],['calNext','cal.next'],['wsPrevDay','ws.prevDay'],['wsNextDay','ws.nextDay'],['wsBack','ws.backAria']].forEach(([id, k]) => { els[id].title = t(k); els[id].setAttribute('aria-label', t(k)); });
+  els.wsSchedule.setAttribute('aria-label', t('ws.schedule'));
   els.noteEditor.setAttribute('aria-label', t('notes.title'));
   els.canvas.setAttribute('aria-label', t('drawing.title'));
-  document.querySelector('.toolbar')?.setAttribute('aria-label', t('notes.title'));
-  document.querySelector('.day-strip')?.setAttribute('aria-label', t('day.sheet'));
   document.querySelector('.color-picker')?.setAttribute('title', t('drawing.color'));
   document.querySelector('.size-control')?.setAttribute('title', t('drawing.size'));
-  els.settingsBtn.title = t('settings.title');
+  if (!drawing.colorTouched) els.brushColor.value = preferences.theme === 'light' ? '#172033' : '#e8edf2';
+  setEraser(drawing.erasing);
+  renderCenterBtn();
   renderSettingsControls();
-  renderAll({ preserveEditor:true });
+  if (user) renderAll();
+  setAuthMode(authMode, true);
+  renderMigrationBanner();
 }
 
 function renderSettingsControls() {
@@ -195,22 +197,9 @@ async function changePreferences(patch) {
   applyPreferences();
   saveLocalPreferences();
   els.settingsSaveStatus.textContent = t('settings.saved');
-  try {
-    await saveCloudPreferences();
-  } catch (error) {
-    els.settingsSaveStatus.textContent = t('settings.localOnly');
-    console.warn('No se pudieron guardar preferencias en Supabase:', error.message);
-  }
+  try { await saveCloudPreferences(); }
+  catch (error) { els.settingsSaveStatus.textContent = t('settings.localOnly'); console.warn('No se pudieron guardar preferencias en Supabase:', error.message); }
 }
-
-function saveLocalPreferences() {
-  if (!user) return;
-  const local = loadLocalState();
-  local.preferences = preferences;
-  localStorage.setItem(userStorageKey(), JSON.stringify(local));
-  state.preferences = preferences;
-}
-
 async function saveCloudPreferences() {
   if (!user) return;
   const displayName = user.user_metadata?.display_name || user.email?.split('@')[0] || 'Usuario';
@@ -218,107 +207,84 @@ async function saveCloudPreferences() {
   if (error) throw error;
   preferencesLoadedFromCloud = true;
 }
-
 async function loadPreferencesFromCloud() {
   preferencesLoadedFromCloud = false;
   const { data, error } = await supabaseClient.from('profiles').select('display_name, settings').eq('id', user.id).maybeSingle();
-  if (error) {
-    // Compatible with an existing database that has not received the new settings column yet.
-    if (/settings|column|schema/i.test(error.message || '')) return;
-    throw error;
-  }
-  if (data?.settings) {
-    preferences = normalizePreferences(data.settings);
-    preferencesLoadedFromCloud = true;
-  }
+  if (error) { if (/settings|column|schema/i.test(error.message || '')) return; throw error; }
+  if (data?.settings && Object.keys(data.settings).length) { preferences = normalizePreferences(data.settings); preferencesLoadedFromCloud = true; }
   if (data?.display_name) user.display_name = data.display_name;
 }
-
-function openSettings() {
-  els.settingsModal.classList.remove('hidden');
-  els.settingsSaveStatus.textContent = '';
-  renderSettingsControls();
-}
+function openSettings() { els.settingsModal.classList.remove('hidden'); els.settingsSaveStatus.textContent = ''; renderSettingsControls(); }
 function closeSettings() { els.settingsModal.classList.add('hidden'); }
 
 function fillFontSizes() {
   els.fontSizeSelect.innerHTML = '';
-  for (let size=10; size<=48; size++) {
+  for (let size = 10; size <= 48; size++) {
     const option = document.createElement('option');
-    option.value = String(size);
-    option.textContent = `${size}px`;
+    option.value = String(size); option.textContent = `${size}px`;
     els.fontSizeSelect.appendChild(option);
   }
   els.fontSizeSelect.value = '16';
 }
 
-function userStorageKey() {
-  return user ? `noti-v2:${user.id}` : 'noti-v2:guest';
-}
+// ---- Almacenamiento local ----
+// noti-v4:<uid>  → notas, índice de dibujos, horarios, excepciones, cola pendiente, preferencias
+// noti-v4d:<uid>:<fecha> → un dibujo (separado para no reescribir un JSON enorme en cada trazo)
+// noti-v2:<uid> y noti-v1 → datos de Noti 3.0/1.0 (solo lectura; nunca se borran)
+const userKey = () => `noti-v4:${user ? user.id : 'guest'}`;
+const legacyKey = () => `noti-v2:${user ? user.id : 'guest'}`;
+const drawingKey = date => `noti-v4d:${user.id}:${date}`;
 
-function loadLocalState() {
-  try {
-    let raw = localStorage.getItem(userStorageKey());
-    // Import the data from the original Noti 1.0 build once, after the user logs in.
-    if (!raw && user) {
-      const legacyRaw = localStorage.getItem('noti-v1');
-      if (legacyRaw) {
-        const legacy = JSON.parse(legacyRaw);
-        const migrated = {
-          ...cloneDefault(),
-          ...legacy,
-          notes: legacy.notes || {},
-          drawings: legacy.drawings || {},
-          fonts: {},
-          schedules: { ...cloneDefault().schedules, ...(legacy.schedules || {}) }
-        };
-        DAYS.forEach(day => {
-          migrated.fonts[day.id] = localStorage.getItem(`font:${day.id}`) || 'system';
-        });
-        localStorage.setItem(userStorageKey(), JSON.stringify(migrated));
-        return migrated;
-      }
-    }
-    if (!raw) return cloneDefault();
-    const saved = JSON.parse(raw);
-    return {
-      ...cloneDefault(),
-      ...saved,
-      notes: saved.notes || {},
-      drawings: saved.drawings || {},
-      fonts: saved.fonts || {},
-      preferences: saved.preferences || null,
-      schedules: { ...cloneDefault().schedules, ...(saved.schedules || {}) }
-    };
-  } catch {
-    return cloneDefault();
-  }
+function readJSON(key) { try { const raw = localStorage.getItem(key); return raw ? JSON.parse(raw) : null; } catch { return null; } }
+function loadLocalPreferences() {
+  return readJSON('noti-prefs-last') || (user && (readJSON(userKey())?.preferences || readJSON(legacyKey())?.preferences)) || null;
 }
-
-function saveLocalState() {
+function saveLocalPreferences() {
+  try { localStorage.setItem('noti-prefs-last', JSON.stringify(preferences)); } catch {}
   if (!user) return;
-  localStorage.setItem(userStorageKey(), JSON.stringify(state));
+  const local = readJSON(userKey()) || {};
+  local.preferences = preferences;
+  try { localStorage.setItem(userKey(), JSON.stringify(local)); } catch {}
+}
+function loadLocalState() {
+  const s = newState();
+  const saved = readJSON(userKey());
+  if (saved) {
+    s.notes = saved.notes || {}; s.drawingIndex = saved.drawingIndex || {};
+    s.items = saved.items || []; s.exceptions = saved.exceptions || []; s.queue = saved.queue || [];
+  }
+  // Datos de Noti 3.0 (por día de la semana) para el aviso de importación
+  const l2 = readJSON(legacyKey()) || readJSON('noti-v1');
+  if (l2) {
+    DAYS.forEach(d => {
+      if (l2.notes?.[d.id]) s.legacy.notes[d.id] = l2.notes[d.id];
+      if (l2.drawings?.[d.id]) s.legacy.drawings[d.id] = l2.drawings[d.id];
+      if (l2.fonts?.[d.id]) s.legacy.fonts[d.id] = l2.fonts[d.id];
+    });
+  }
+  return s;
+}
+function saveLocal() {
+  if (!user) return;
+  const prev = readJSON(userKey()) || {};
+  const { notes, drawingIndex, items, exceptions, queue } = state;
+  try { localStorage.setItem(userKey(), JSON.stringify({ ...prev, notes, drawingIndex, items, exceptions, queue, preferences })); }
+  catch (e) { console.warn('No se pudo guardar localmente:', e.message); }
+}
+function getLocalDrawing(date) {
+  if (state.drawings[date] !== undefined) return state.drawings[date];
+  try { const v = localStorage.getItem(drawingKey(date)); if (v !== null) { state.drawings[date] = v; return v; } } catch {}
+  return undefined;
+}
+function setLocalDrawing(date, data) {
+  state.drawings[date] = data;
+  try { data ? localStorage.setItem(drawingKey(date), data) : localStorage.removeItem(drawingKey(date)); }
+  catch { showToastFn(t('sync.storageFull')); }
 }
 
-function setSyncStatus(text, mode = '') {
-  els.syncStatus.textContent = text;
-  els.syncStatus.className = `sync-badge ${mode}`.trim();
-}
-
-function markSaving(element = els.saveStatus) {
-  element.textContent = t('sync.saving');
-}
-
-function markSaved(element = els.saveStatus) {
-  element.textContent = t('sync.synced');
-}
-
-function showAuthMessage(message, type = '') {
-  els.authMessage.textContent = message;
-  els.authMessage.className = `auth-message ${type}`.trim();
-}
-
-function setAuthMode(mode) {
+function setSyncStatus(text, mode = '') { els.syncStatus.textContent = text; els.syncStatus.className = `sync-badge ${mode}`.trim(); }
+function showAuthMessage(message, type = '') { els.authMessage.textContent = message; els.authMessage.className = `auth-message ${type}`.trim(); }
+function setAuthMode(mode, keepMessage = false) {
   authMode = mode;
   const signup = mode === 'signup';
   els.loginTab.classList.toggle('active', !signup);
@@ -327,43 +293,27 @@ function setAuthMode(mode) {
   els.authName.required = signup;
   els.authSubmit.textContent = signup ? t('auth.submitSignup') : t('auth.submitLogin');
   els.authPassword.autocomplete = signup ? 'new-password' : 'current-password';
-  showAuthMessage('');
+  if (!keepMessage) showAuthMessage('');
 }
 
 async function handleAuthSubmit(event) {
   event.preventDefault();
-  const email = els.authEmail.value.trim();
-  const password = els.authPassword.value;
-  const name = els.authName.value.trim();
-
+  const email = els.authEmail.value.trim(), password = els.authPassword.value, name = els.authName.value.trim();
   els.authSubmit.disabled = true;
   showAuthMessage(authMode === 'signup' ? t('auth.creating') : t('auth.signingIn'));
-
   try {
     if (authMode === 'signup') {
-      const { data, error } = await supabaseClient.auth.signUp({
-        email,
-        password,
-        options: { data: { display_name: name } }
-      });
+      const { data, error } = await supabaseClient.auth.signUp({ email, password, options: { data: { display_name: name } } });
       if (error) throw error;
-      if (data.session) {
-        await bootstrapUser(data.user);
-      } else {
-        showAuthMessage(t('auth.created'), 'success');
-      }
+      if (data.session) await bootstrapUser(data.user); else showAuthMessage(t('auth.created'), 'success');
     } else {
       const { data, error } = await supabaseClient.auth.signInWithPassword({ email, password });
       if (error) throw error;
       await bootstrapUser(data.user);
     }
-  } catch (error) {
-    showAuthMessage(humanAuthError(error), 'error');
-  } finally {
-    els.authSubmit.disabled = false;
-  }
+  } catch (error) { showAuthMessage(humanAuthError(error), 'error'); }
+  finally { els.authSubmit.disabled = false; }
 }
-
 function humanAuthError(error) {
   const msg = error?.message || t('auth.generic');
   if (/invalid login credentials/i.test(msg)) return t('auth.invalid');
@@ -371,6 +321,44 @@ function humanAuthError(error) {
   if (/user already registered/i.test(msg)) return t('auth.registered');
   if (/password/i.test(msg) && /6/i.test(msg)) return t('auth.password6');
   return msg;
+}
+
+function showToastFn(message) {
+  els.toast.textContent = message;
+  els.toast.classList.add('show');
+  clearTimeout(showToastFn.timer);
+  showToastFn.timer = setTimeout(() => els.toast.classList.remove('show'), 2600);
+}
+function escapeHtml(value) { return String(value).replace(/[&<>'"]/g, ch => ({'&':'&amp;','<':'&lt;','>':'&gt;',"'":'&#39;','"':'&quot;'}[ch])); }
+function escapeAttr(value) { return escapeHtml(value).replace(/`/g, '&#96;'); }
+const uuid = () => (crypto.randomUUID ? crypto.randomUUID() : 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, c => { const r = Math.random()*16|0; return (c === 'x' ? r : (r&3|8)).toString(16); }));
+
+// =====================  CAPA DE DATOS (nube + cola local)  =====================
+const rowToItem = r => ({ id:r.id, kind:r.kind, subject:r.subject||'', room:r.room||'', teacher:r.teacher||'', color:r.color||'',
+  start_time:C.normTime(r.start_time), end_time:C.normTime(r.end_time), weekdays:(r.weekdays||[]).map(Number),
+  start_date:r.start_date||null, end_date:r.end_date||null, single_date:r.single_date||null, position:r.position||0, legacy_schedule_id:r.legacy_schedule_id||null });
+const itemToRow = i => ({ id:i.id, user_id:user.id, kind:i.kind, subject:i.subject||'', room:i.room||'', teacher:i.teacher||'', color:i.color||null,
+  start_time:i.start_time ? `${i.start_time}:00` : null, end_time:i.end_time ? `${i.end_time}:00` : null,
+  weekdays:i.kind === 'single' ? [] : i.weekdays, start_date:i.start_date||null, end_date:i.end_date||null, single_date:i.kind === 'single' ? i.single_date : null,
+  position:i.position||0, legacy_schedule_id:i.legacy_schedule_id||null, updated_at:new Date().toISOString() });
+const rowToEx = r => ({ item_id:r.item_id, occurrence_date:r.occurrence_date, action:r.action,
+  subject:r.subject ?? null, room:r.room ?? null, teacher:r.teacher ?? null, start_time:r.start_time ? C.normTime(r.start_time) : null, end_time:r.end_time ? C.normTime(r.end_time) : null });
+const exToRow = e => ({ item_id:e.item_id, occurrence_date:e.occurrence_date, user_id:user.id, action:e.action,
+  subject:e.subject ?? null, room:e.room ?? null, teacher:e.teacher ?? null,
+  start_time:e.start_time ? `${e.start_time}:00` : null, end_time:e.end_time ? `${e.end_time}:00` : null, updated_at:new Date().toISOString() });
+
+const isMissingTable = e => !!e && (/PGRST205|42P01/.test(e.code || '') || /schema cache|does not exist|could not find the table/i.test(e.message || ''));
+const isQueued = key => state.queue.some(q => q.key === key);
+
+function renderMigrationBanner() {
+  const show = !!user && !state.cloudReady;
+  els.migrationBanner.classList.toggle('hidden', !show);
+  els.migrationBanner.textContent = show ? t('sync.migrationNeeded') : '';
+}
+
+async function ensureProfile(displayName) {
+  const { error } = await supabaseClient.from('profiles').upsert({ id:user.id, display_name:displayName }, { onConflict:'id' });
+  if (error) console.warn('No se pudo actualizar profile:', error.message);
 }
 
 async function bootstrapUser(authUser) {
@@ -381,572 +369,768 @@ async function bootstrapUser(authUser) {
   els.welcomeLine.textContent = displayName;
   setSyncStatus(t('sync.connecting'), 'loading');
 
-  initialLocalSnapshot = loadLocalState();
-  state = cloneDefault();
+  state = loadLocalState();           // primero lo local: la app es usable aunque no haya red
   initialized = false;
-  preferences = normalizePreferences(initialLocalSnapshot.preferences || DEFAULT_PREFERENCES);
+  preferences = normalizePreferences(loadLocalPreferences() || DEFAULT_PREFERENCES);
+  applyPreferences();
 
   await ensureProfile(displayName);
-  await loadPreferencesFromCloud().catch(error => console.warn('No se pudieron cargar preferencias:', error.message));
+  await loadPreferencesFromCloud().catch(e => console.warn('No se pudieron cargar preferencias:', e.message));
   applyPreferences();
   if (!preferencesLoadedFromCloud) {
     saveLocalPreferences();
-    await saveCloudPreferences().catch(error => console.warn('No se pudieron inicializar preferencias en Supabase:', error.message));
+    await saveCloudPreferences().catch(e => console.warn('No se pudieron inicializar preferencias en Supabase:', e.message));
   }
-  await loadCloudState();
-  await setupRealtime();
-
-  renderAll();
+  try { await loadCloudState(); }
+  catch (error) { console.warn('Carga de nube incompleta; se usa la copia local:', error.message); setSyncStatus(navigator.onLine ? t('sync.limited') : t('sync.localSaved'), 'warning'); }
+  await setupRealtime().catch(e => console.warn('Realtime no disponible:', e.message));
   initialized = true;
-  setSyncStatus(t('sync.synced'), 'success');
+  renderAll();
+  await flushQueue();
+  if (state.cloudReady && !state.queue.length) setSyncStatus(t('sync.synced'), 'success');
 }
 
-async function ensureProfile(displayName) {
-  const local = loadLocalState();
-  const payload = { id:user.id, display_name:displayName };
-  const { error } = await supabaseClient.from('profiles').upsert(payload, { onConflict:'id' });
-  if (error) console.warn('No se pudo actualizar profile:', error.message);
+function overlayQueue(items, exceptions) {
+  for (const op of state.queue) {
+    if (op.type === 'item') { const it = state.items.find(i => i.id === op.id); if (it) { const k = items.findIndex(i => i.id === op.id); k >= 0 ? items[k] = it : items.push(it); } }
+    if (op.type === 'item-delete') { items = items.filter(i => i.id !== op.id); exceptions = exceptions.filter(e => e.item_id !== op.id); }
+    if (op.type === 'ex') { const e = state.exceptions.find(x => x.item_id === op.item_id && x.occurrence_date === op.date); if (e) { const k = exceptions.findIndex(x => x.item_id === op.item_id && x.occurrence_date === op.date); k >= 0 ? exceptions[k] = e : exceptions.push(e); } }
+    if (op.type === 'ex-delete') exceptions = exceptions.filter(x => !(x.item_id === op.item_id && x.occurrence_date === op.date));
+  }
+  return { items, exceptions };
 }
 
-function emptyStateForCloud() {
-  return cloneDefault();
+async function loadLegacyFromCloud() {
+  const uid = user.id;
+  const [ln, ld, ls] = await Promise.all([
+    supabaseClient.from('notes').select('day_of_week, content, font_family').eq('user_id', uid),
+    supabaseClient.from('drawings').select('day_of_week, drawing_data').eq('user_id', uid),
+    supabaseClient.from('schedules').select('id, day_of_week, start_time, end_time, subject, room, teacher, color, position').eq('user_id', uid)
+  ]);
+  (ln.data || []).forEach(r => { const d = DAYS.find(x => x.db === r.day_of_week); if (d && r.content) { state.legacy.notes[d.id] = r.content; state.legacy.fonts[d.id] = r.font_family || 'system'; } });
+  (ld.data || []).forEach(r => { const d = DAYS.find(x => x.db === r.day_of_week); if (d && r.drawing_data) state.legacy.drawings[d.id] = r.drawing_data; });
+  return ls.error ? [] : (ls.data || []);
 }
 
 async function loadCloudState() {
-  const [notesRes, drawingsRes, scheduleRes] = await Promise.all([
-    supabaseClient.from('notes').select('day_of_week, title, content, font_family').eq('user_id', user.id),
-    supabaseClient.from('drawings').select('day_of_week, drawing_data').eq('user_id', user.id),
-    supabaseClient.from('schedules').select('id, day_of_week, start_time, end_time, subject, room, teacher, color, position').eq('user_id', user.id).order('position', { ascending: true }).order('start_time', { ascending: true })
+  const uid = user.id;
+  const from = tb => supabaseClient.from(tb);
+  const [n, d, si, se] = await Promise.all([
+    from('notes_by_date').select('note_date, content, font_family').eq('user_id', uid),
+    from('drawings_by_date').select('drawing_date, updated_at').eq('user_id', uid),
+    from('schedule_items').select('*').eq('user_id', uid),
+    from('schedule_exceptions').select('*').eq('user_id', uid)
   ]);
-
-  for (const result of [notesRes, drawingsRes, scheduleRes]) {
-    if (result.error) throw result.error;
+  const failed = [n, d, si, se].find(r => r.error);
+  if (failed) {
+    if (isMissingTable(failed.error)) { state.cloudReady = false; renderMigrationBanner(); await loadLegacyFromCloud().catch(() => {}); scheduleRetry(); return; }
+    throw failed.error;
   }
+  state.cloudReady = true;
+  renderMigrationBanner();
 
-  const cloud = emptyStateForCloud();
-  cloud.preferences = preferences;
-
-  (notesRes.data || []).forEach(row => {
-    const day = DAYS.find(d => d.db === row.day_of_week);
-    if (!day) return;
-    cloud.notes[day.id] = row.content || '';
-    cloud.fonts[day.id] = row.font_family || 'system';
-  });
-
-  (drawingsRes.data || []).forEach(row => {
-    const day = DAYS.find(d => d.db === row.day_of_week);
-    if (!day) return;
-    cloud.drawings[day.id] = row.drawing_data || '';
-  });
-
-  (scheduleRes.data || []).forEach(row => {
-    const day = DAYS.find(d => d.db === row.day_of_week);
-    if (!day) return;
-    if (!cloud.schedules[day.id]) cloud.schedules[day.id] = [];
-    const time = row.start_time && row.end_time ? `${String(row.start_time).slice(0,5)} - ${String(row.end_time).slice(0,5)}` : (row.start_time ? String(row.start_time).slice(0,5) : '');
-    cloud.schedules[day.id].push({ id: row.id, time, subject: row.subject || '', meta: row.room || row.teacher ? [row.room, row.teacher].filter(Boolean).join(' · ') : '', room: row.room || '', teacher: row.teacher || '', color: row.color || '' });
-  });
-
-  cloudSnapshotExists = Object.values(cloud.notes).some(Boolean)
-    || Object.values(cloud.drawings).some(Boolean)
-    || Object.values(cloud.schedules).some(arr => arr.length);
-
-  if (!cloudSnapshotExists && hasLocalData(initialLocalSnapshot)) {
-    state = initialLocalSnapshot;
-    await migrateLocalToCloud();
-  } else {
-    state = cloud;
-    state.preferences = preferences;
-    state.selectedDay = initialLocalSnapshot?.selectedDay || 'mon';
-    saveLocalState();
+  const notes = {};
+  (n.data || []).forEach(r => { notes[r.note_date] = { content:r.content || '', font:r.font_family || 'system' }; });
+  const prevIdx = state.drawingIndex, idx = {};
+  (d.data || []).forEach(r => { idx[r.drawing_date] = r.updated_at || 'cloud'; });
+  for (const op of state.queue) {
+    if (op.type === 'note' && state.notes[op.date]) notes[op.date] = state.notes[op.date];
+    if (op.type === 'drawing') { if (state.drawingIndex[op.date]) idx[op.date] = state.drawingIndex[op.date]; else delete idx[op.date]; }
   }
+  // Un dibujo cambiado en otro dispositivo invalida la copia local de esta fecha
+  Object.keys(idx).forEach(date => { if (prevIdx[date] && prevIdx[date] !== idx[date] && !isQueued('drawing:' + date)) invalidateDrawing(date); });
+  Object.keys(prevIdx).forEach(date => { if (!idx[date] && !isQueued('drawing:' + date)) invalidateDrawing(date); });
+
+  const merged = overlayQueue((si.data || []).map(rowToItem), (se.data || []).map(rowToEx));
+  state.notes = notes; state.drawingIndex = idx; state.items = merged.items; state.exceptions = merged.exceptions;
+
+  const legacySchedules = await loadLegacyFromCloud().catch(() => []);
+  migrateLegacySchedules(legacySchedules);
+  saveLocal();
 }
 
-function hasLocalData(candidate) {
-  if (!candidate) return false;
-  return Object.values(candidate.notes || {}).some(Boolean)
-    || Object.values(candidate.drawings || {}).some(Boolean)
-    || Object.values(candidate.schedules || {}).some(arr => Array.isArray(arr) && arr.length);
-}
+function invalidateDrawing(date) { delete state.drawings[date]; try { localStorage.removeItem(drawingKey(date)); } catch {} }
 
-async function migrateLocalToCloud() {
-  setSyncStatus(t('sync.uploading'), 'loading');
-  const daysWithData = DAYS.filter(day =>
-    (state.notes[day.id] || '') || (state.drawings[day.id] || '') || (state.schedules[day.id] || []).length
-  );
-  for (const day of daysWithData) {
-    if (state.notes[day.id] || state.fonts[day.id]) await upsertNote(day.id, state.notes[day.id] || '', state.fonts[day.id] || 'system', false);
-    if (state.drawings[day.id] !== undefined) await upsertDrawing(day.id, state.drawings[day.id] || '', false);
-    await replaceSchedules(day.id, state.schedules[day.id] || [], false);
-  }
-  saveLocalState();
-  showToastFn(t('sync.localMigrated'));
-}
-
-function parseTimeRange(time) {
-  const parts = String(time || '').split('-').map(v => v.trim());
-  const start = parts[0] || null;
-  const end = parts[1] || null;
-  return { start_time: /^\d{1,2}:\d{2}$/.test(start || '') ? normalizeTime(start) : null, end_time: /^\d{1,2}:\d{2}$/.test(end || '') ? normalizeTime(end) : null };
-}
-
-function normalizeTime(value) {
-  const [h, m] = value.split(':').map(Number);
-  return `${String(h).padStart(2,'0')}:${String(m).padStart(2,'0')}:00`;
-}
-
-async function upsertNote(dayId, content, font, toast = true) {
-  const day = DAYS.find(d => d.id === dayId);
-  if (!day) return;
-  const payload = { user_id: user.id, day_of_week: day.db, title: null, content, font_family: font || 'system' };
-  const { error } = await supabaseClient.from('notes').upsert(payload, { onConflict: 'user_id,day_of_week' });
-  if (error) throw error;
-  state.notes[dayId] = content;
-  state.fonts[dayId] = font || 'system';
-  saveLocalState();
-  if (toast) markSaved();
-}
-
-async function upsertDrawing(dayId, drawingData, toast = true) {
-  const day = DAYS.find(d => d.id === dayId);
-  if (!day) return;
-  const payload = { user_id: user.id, day_of_week: day.db, drawing_data: drawingData || null };
-  const { error } = await supabaseClient.from('drawings').upsert(payload, { onConflict: 'user_id,day_of_week' });
-  if (error) throw error;
-  state.drawings[dayId] = drawingData || '';
-  saveLocalState();
-  if (toast) markSaved(els.drawingStatus);
-}
-
-async function replaceSchedules(dayId, rows, toast = true) {
-  const day = DAYS.find(d => d.id === dayId);
-  if (!day) return;
-  const { error: deleteError } = await supabaseClient.from('schedules').delete().eq('user_id', user.id).eq('day_of_week', day.db);
-  if (deleteError) throw deleteError;
-
-  const payload = rows.map((row, index) => {
-    const parsed = parseTimeRange(row.time);
-    const metaParts = String(row.meta || '').split(' · ');
-    const room = row.room ?? metaParts[0] ?? '';
-    const teacher = row.teacher ?? metaParts[1] ?? '';
-    return {
-      user_id: user.id,
-      day_of_week: day.db,
-      start_time: parsed.start_time,
-      end_time: parsed.end_time,
-      subject: row.subject || '',
-      room,
-      teacher,
-      color: row.color || null,
-      position: index
-    };
+// Red de seguridad: si algún horario de Noti 3.0 no fue copiado por el SQL, se copia aquí (idempotente por legacy_schedule_id).
+function migrateLegacySchedules(rows) {
+  const known = new Set(state.items.map(i => i.legacy_schedule_id).filter(Boolean));
+  rows.forEach((r, idx) => {
+    if (!(r.day_of_week >= 1 && r.day_of_week <= 7) || known.has(String(r.id))) return;
+    const item = { id:uuid(), kind:'recurring', subject:r.subject || '', room:r.room || '', teacher:r.teacher || '', color:r.color || '',
+      start_time:C.normTime(r.start_time), end_time:C.normTime(r.end_time), weekdays:[r.day_of_week], start_date:null, end_date:null, single_date:null,
+      position:r.position ?? idx, legacy_schedule_id:String(r.id) };
+    state.items.push(item);
+    enqueue({ key:'item:' + item.id, type:'item', id:item.id });
   });
-
-  if (payload.length) {
-    const { error: insertError } = await supabaseClient.from('schedules').insert(payload);
-    if (insertError) throw insertError;
-  }
-
-  state.schedules[dayId] = rows;
-  saveLocalState();
-  if (toast) showToastFn(t('sync.scheduleSaved'));
 }
 
+// ---- Cola de sincronización: nada se pierde si falla la red ----
+function enqueue(op) {
+  const i = state.queue.findIndex(q => q.key === op.key);
+  if (i >= 0) state.queue[i] = op; else state.queue.push(op);   // se reemplaza EN SU LUGAR para conservar el orden (items antes que sus excepciones)
+  saveLocal();
+  refreshStatuses();
+  flushQueue();
+}
+
+async function runOp(op) {
+  const db = supabaseClient;
+  const now = new Date().toISOString();
+  let res;
+  if (op.type === 'note') {
+    const n = state.notes[op.date]; if (!n) return;
+    res = await db.from('notes_by_date').upsert({ user_id:user.id, note_date:op.date, content:n.content, font_family:n.font || 'system', updated_at:now }, { onConflict:'user_id,note_date' });
+  } else if (op.type === 'drawing') {
+    const data = getLocalDrawing(op.date) || null;
+    res = await db.from('drawings_by_date').upsert({ user_id:user.id, drawing_date:op.date, drawing_data:data, updated_at:state.drawingIndex[op.date] || now }, { onConflict:'user_id,drawing_date' });
+  } else if (op.type === 'item') {
+    const it = state.items.find(i => i.id === op.id); if (!it) return;
+    res = it.legacy_schedule_id
+      ? await db.from('schedule_items').upsert(itemToRow(it), { onConflict:'user_id,legacy_schedule_id', ignoreDuplicates:false })
+      : await db.from('schedule_items').upsert(itemToRow(it), { onConflict:'id' });
+  } else if (op.type === 'item-delete') {
+    res = await db.from('schedule_items').delete().eq('id', op.id).eq('user_id', user.id);
+  } else if (op.type === 'ex') {
+    const e = state.exceptions.find(x => x.item_id === op.item_id && x.occurrence_date === op.date); if (!e) return;
+    res = await db.from('schedule_exceptions').upsert(exToRow(e), { onConflict:'item_id,occurrence_date' });
+  } else if (op.type === 'ex-delete') {
+    res = await db.from('schedule_exceptions').delete().eq('item_id', op.item_id).eq('occurrence_date', op.date).eq('user_id', user.id);
+  }
+  if (res?.error) throw res.error;
+}
+
+async function flushQueue() {
+  if (flushing || !user) return;
+  if (!state.queue.length) { refreshStatuses(); return; }
+  if (!state.cloudReady) { refreshStatuses(); scheduleRetry(); return; }
+  flushing = true;
+  try {
+    while (state.queue.length) {
+      const op = state.queue[0];
+      try { await runOp(op); }
+      catch (e) {
+        if (isMissingTable(e)) { state.cloudReady = false; renderMigrationBanner(); throw e; }
+        if (e.code === '23505' || e.code === '23503') { console.warn('Operación descartada por conflicto permanente:', op.key, e.message); if (state.queue[0] === op) state.queue.shift(); saveLocal(); continue; }
+        throw e;
+      }
+      if (state.queue[0] === op) state.queue.shift();
+      saveLocal();
+      refreshStatuses();
+    }
+    syncFailed = false; setSyncStatus(t('sync.synced'), 'success');
+  } catch (e) {
+    syncFailed = true; console.warn('Sincronización pendiente:', e.message);
+    setSyncStatus(navigator.onLine ? t('sync.limited') : t('sync.localSaved'), 'warning');
+    scheduleRetry();
+  } finally { flushing = false; refreshStatuses(); }
+}
+function scheduleRetry() {
+  clearTimeout(flushTimer);
+  flushTimer = setTimeout(async () => { if (!user) return; if (!state.cloudReady) await loadCloudState().catch(() => {}); flushQueue(); }, 20000);
+}
+
+// ---- Realtime ----
 async function setupRealtime() {
   if (realtimeChannel) await supabaseClient.removeChannel(realtimeChannel);
-  realtimeChannel = supabaseClient
-    .channel(`noti-user-${user.id}`)
-    .on('postgres_changes', { event: '*', schema: 'public', table: 'notes', filter: `user_id=eq.${user.id}` }, handleRemoteChange)
-    .on('postgres_changes', { event: '*', schema: 'public', table: 'drawings', filter: `user_id=eq.${user.id}` }, handleRemoteChange)
-    .on('postgres_changes', { event: '*', schema: 'public', table: 'schedules', filter: `user_id=eq.${user.id}` }, handleRemoteChange)
+  const f = `user_id=eq.${user.id}`;
+  realtimeChannel = supabaseClient.channel(`noti-user-${user.id}`)
+    .on('postgres_changes', { event:'*', schema:'public', table:'notes_by_date', filter:f }, onRemoteNote)
+    .on('postgres_changes', { event:'*', schema:'public', table:'drawings_by_date', filter:f }, onRemoteDrawing)
+    .on('postgres_changes', { event:'*', schema:'public', table:'schedule_items', filter:f }, onRemoteSchedule)
+    .on('postgres_changes', { event:'*', schema:'public', table:'schedule_exceptions', filter:f }, onRemoteSchedule)
     .subscribe(status => {
-      if (status === 'SUBSCRIBED') setSyncStatus(t('sync.synced'), 'success');
+      if (status === 'SUBSCRIBED' && !state.queue.length) setSyncStatus(t('sync.synced'), 'success');
       if (status === 'CHANNEL_ERROR' || status === 'TIMED_OUT') setSyncStatus(t('sync.limited'), 'warning');
     });
 }
-
-function handleRemoteChange(payload) {
+function afterRemote(date) { renderCalendar(); renderAgenda(); if (wsOpen && date === currentDate) { syncEditorFromState(); renderLegacyBanner(); } }
+function onRemoteNote(p) {
   if (!initialized) return;
-  // A local write will also produce a realtime event; the next full reload keeps local and cloud consistent.
-  refreshCurrentCloudState(false).catch(error => {
-    console.warn('No se pudo refrescar sincronización:', error.message);
-    setSyncStatus(t('sync.limited'), 'warning');
+  if (p.eventType === 'DELETE') { const d = p.old?.note_date; if (d && !isQueued('note:' + d)) { delete state.notes[d]; saveLocal(); afterRemote(d); } return; }
+  const row = p.new, d = row.note_date;
+  if (isQueued('note:' + d)) return;                                  // tus cambios locales pendientes mandan
+  const cur = state.notes[d];
+  if (cur && cur.content === (row.content || '') && cur.font === (row.font_family || 'system')) return;   // eco de tu propio guardado
+  if (wsOpen && d === currentDate && document.activeElement === els.noteEditor) return;                    // no pisar lo que estás escribiendo
+  state.notes[d] = { content:row.content || '', font:row.font_family || 'system' };
+  saveLocal(); afterRemote(d);
+}
+function onRemoteDrawing(p) {
+  if (!initialized) return;
+  const d = (p.new?.drawing_date) || (p.old?.drawing_date); if (!d || isQueued('drawing:' + d)) return;
+  if (p.eventType === 'DELETE') delete state.drawingIndex[d];
+  else { if (state.drawingIndex[d] === p.new.updated_at) return; state.drawingIndex[d] = p.new.updated_at || 'cloud'; }
+  invalidateDrawing(d); saveLocal(); renderCalendar();
+  if (wsOpen && d === currentDate && !drawing.active && !drawing.dirty) loadDrawing(d);
+}
+async function onRemoteSchedule() {
+  if (!initialized) return;
+  const [si, se] = await Promise.all([supabaseClient.from('schedule_items').select('*').eq('user_id', user.id), supabaseClient.from('schedule_exceptions').select('*').eq('user_id', user.id)]);
+  if (si.error || se.error) return;
+  const m = overlayQueue(si.data.map(rowToItem), se.data.map(rowToEx));
+  state.items = m.items; state.exceptions = m.exceptions; saveLocal(); renderAll();
+}
+async function refreshCloud() {
+  if (!user || !initialized) return;
+  await flushQueue();
+  try { await loadCloudState(); renderAll(); if (wsOpen) syncEditorFromState(); } catch (e) { console.warn('Refresco omitido:', e.message); }
+}
+
+// =====================  CALENDARIO, AGENDA Y HORARIOS  =====================
+const noteHasContent = html => !!html && (html.replace(/<[^>]*>/g, '').replace(/&nbsp;/g, ' ').trim().length > 0 || /<input/i.test(html));
+const occurrencesFor = iso => C.resolveForDate(state.items, state.exceptions, iso);
+
+function renderAll() { renderCalendar(); renderAgenda(); if (wsOpen) { renderWsHeader(); renderWsSchedule(); } }
+
+function renderCalendar() {
+  const today = C.todayISO();
+  const title = new Intl.DateTimeFormat(locale(), { month:'long', year:'numeric' }).format(new Date(state.viewYear, state.viewMonth, 1));
+  els.calTitle.textContent = title.charAt(0).toUpperCase() + title.slice(1);
+  const sep = () => { const s = document.createElement('div'); s.className = 'cal-sep'; return s; };
+
+  const head = [];
+  DAYS.forEach((d, i) => { if (i === 5) head.push(sep()); const c = document.createElement('div'); c.className = 'cal-wd'; c.textContent = dayShort(d.id); head.push(c); });
+  els.calWeekdays.replaceChildren(...head);
+
+  const cells = [];
+  C.monthGrid(state.viewYear, state.viewMonth).forEach(cell => {
+    if (cell.weekday === 6) cells.push(sep());
+    const note = noteHasContent(state.notes[cell.iso]?.content), draw = !!state.drawingIndex[cell.iso], sched = occurrencesFor(cell.iso).length > 0;
+    const b = document.createElement('button');
+    b.type = 'button'; b.dataset.iso = cell.iso;
+    b.className = `cal-cell${cell.inMonth ? '' : ' out'}${cell.iso === today ? ' today' : ''}${cell.iso === state.selectedDate ? ' selected' : ''}`;
+    if (cell.iso === today) b.setAttribute('aria-current', 'date');
+    const info = [note && t('cal.legendNote'), draw && t('cal.legendDraw'), sched && t('cal.legendSched')].filter(Boolean).join(', ');
+    b.setAttribute('aria-label', fmtFull(cell.iso) + (info ? ` — ${info}` : ''));
+    b.innerHTML = `<span class="num">${cell.day}</span><span class="dots" aria-hidden="true">${note ? '<i class="dot dot-note"></i>' : ''}${draw ? '<i class="dot dot-draw"></i>' : ''}${sched ? '<i class="dot dot-sched"></i>' : ''}</span>`;
+    b.addEventListener('click', () => openWorkspace(cell.iso, b));
+    cells.push(b);
   });
+  els.calGrid.replaceChildren(...cells);
 }
 
-async function refreshCurrentCloudState(showStatus = true) {
-  if (showStatus) setSyncStatus(t('sync.updating'), 'loading');
-  const selected = state.selectedDay;
-  const local = { ...state };
-  await loadCloudState();
-  state.selectedDay = selected;
-  renderAll();
-  if (showStatus) setSyncStatus(t('sync.synced'), 'success');
-  else setSyncStatus(t('sync.synced'), 'success');
-  if (local.selectedDay !== selected) state.selectedDay = selected;
+function shiftMonth(n) {
+  const m = C.addMonths(state.viewYear, state.viewMonth, n);
+  state.viewYear = m.year; state.viewMonth = m.month; state.followToday = false;
+  renderCalendar();
 }
-
-function scheduleFor(dayId) { return state.schedules[dayId] || []; }
-
-function dayName(dayId) { return t(`day.${dayId}`); }
-function dayShort(dayId) { return t(`day.${dayId}Short`); }
-
-function formatDaySubtitle(dayId) {
-  return ['sat','sun'].includes(dayId) ? t('day.weekendSubtitle') : t('day.weekSubtitle');
-}
-
-function renderDayButtons() {
-  const make = day => {
-    const btn = document.createElement('button');
-    btn.type = 'button';
-    btn.className = `day-btn ${state.selectedDay === day.id ? 'active' : ''}`;
-    btn.innerHTML = `<span class="short">${dayShort(day.id)}</span><span class="date">${dayName(day.id)}</span>`;
-    btn.addEventListener('click', () => selectDay(day.id));
-    return btn;
-  };
-  els.weekdayButtons.replaceChildren(...DAYS.slice(0,5).map(make));
-  els.weekendButtons.replaceChildren(...DAYS.slice(5).map(make));
-}
-
-async function selectDay(dayId) {
-  if (dayId === state.selectedDay) return;
-  await flushCurrentLocalEdits();
-  state.selectedDay = dayId;
+function goToday() {
+  const today = C.todayISO(), d = C.parseISO(today);
+  state.viewYear = d.getFullYear(); state.viewMonth = d.getMonth(); state.selectedDate = today; state.followToday = true;
   renderAll();
 }
+function setViewToDate(iso) { const d = C.parseISO(iso); state.viewYear = d.getFullYear(); state.viewMonth = d.getMonth(); }
 
-function renderSchedule() {
-  const rows = scheduleFor(state.selectedDay);
-  els.scheduleCount.textContent = `${rows.length} ${rows.length === 1 ? t('schedule.block') : t('schedule.blocks')}`;
-  if (!rows.length) {
-    els.scheduleList.innerHTML = `<div class="empty-state">${t('schedule.empty')}</div>`;
-    return;
-  }
-  els.scheduleList.innerHTML = rows.map((row, i) => `
+// La fecha "de hoy" sigue al calendario real: se recalcula a medianoche local y al volver a la app.
+let midnightTimer = null;
+function scheduleMidnight() {
+  clearTimeout(midnightTimer);
+  const now = new Date(), next = new Date(now.getFullYear(), now.getMonth(), now.getDate() + 1, 0, 0, 1);
+  midnightTimer = setTimeout(() => { onDayRollover(); scheduleMidnight(); }, next - now);
+}
+let lastToday = C.todayISO();
+function onDayRollover() {
+  const today = C.todayISO(); if (today === lastToday) return;
+  const wasSelectedToday = state.selectedDate === lastToday;
+  lastToday = today;
+  if (state.followToday) { setViewToDate(today); }
+  if (wasSelectedToday && !wsOpen) state.selectedDate = today;
+  if (user) renderAll();
+}
+
+function renderAgenda() {
+  const iso = state.selectedDate, id = dayIdOf(iso);
+  els.dayTitle.textContent = fmtFull(iso);
+  els.daySubtitle.textContent = ['sat', 'sun'].includes(id) ? t('day.weekendSubtitle') : t('day.weekSubtitle');
+  renderScheduleList(els.scheduleList, els.scheduleCount, iso);
+}
+
+function metaOf(o) { return [o.room, o.teacher].filter(Boolean).join(' · '); }
+function renderScheduleList(listEl, countEl, iso) {
+  const rows = occurrencesFor(iso);
+  countEl.textContent = `${rows.length} ${rows.length === 1 ? t('schedule.block') : t('schedule.blocks')}`;
+  if (!rows.length) { listEl.innerHTML = `<div class="empty-state">${t('schedule.empty')}</div>`; return; }
+  listEl.innerHTML = rows.map((o, i) => `
     <div class="schedule-row">
-      <div class="schedule-time">${escapeHtml(row.time || t('schedule.noTime'))}</div>
+      <div class="schedule-time">${escapeHtml(C.timeRangeLabel(o.start_time, o.end_time) || t('schedule.noTime'))}</div>
       <div>
-        <div class="schedule-subject">${escapeHtml(row.subject || t('schedule.noName'))}</div>
-        ${row.meta ? `<div class="schedule-meta">${escapeHtml(row.meta)}</div>` : ''}
+        <div class="schedule-subject">${escapeHtml(o.subject || t('schedule.noName'))}</div>
+        ${metaOf(o) ? `<div class="schedule-meta">${escapeHtml(metaOf(o))}</div>` : ''}
+        ${(o.kind === 'single' || o.overridden) ? `<div class="tags">${o.kind === 'single' ? `<span class="tag">${t('sch.tagSingle')}</span>` : ''}${o.overridden ? `<span class="tag">${t('sch.tagChanged')}</span>` : ''}</div>` : ''}
       </div>
-      <button class="tool-btn schedule-edit-inline" data-edit-index="${i}" type="button">${t('schedule.editInline')}</button>
-    </div>
-  `).join('');
-  els.scheduleList.querySelectorAll('[data-edit-index]').forEach(btn => {
-    btn.addEventListener('click', () => openScheduleModal(Number(btn.dataset.editIndex)));
+      <button class="tool-btn schedule-edit-inline" data-edit="${i}" type="button">${t('schedule.editInline')}</button>
+    </div>`).join('');
+  listEl.querySelectorAll('[data-edit]').forEach(btn => btn.addEventListener('click', () => openScheduleModal(rows[Number(btn.dataset.edit)])));
+}
+
+// ---- Modal de actividad (nueva / editar) ----
+let sch = null;   // { date, occ, item, kind, weekdays:Set }
+
+function renderWeekdayChips() {
+  const parts = [];
+  DAYS.forEach((d, i) => {
+    if (i === 5) parts.push('<span class="chip-sep" aria-hidden="true"></span>');
+    parts.push(`<button type="button" class="chip" data-wd="${d.db}" aria-pressed="${sch.weekdays.has(d.db)}">${dayShort(d.id)}</button>`);
   });
+  els.weekdayChips.innerHTML = parts.join('');
+  els.weekdayChips.querySelectorAll('.chip').forEach(b => b.addEventListener('click', () => {
+    const n = Number(b.dataset.wd); sch.weekdays.has(n) ? sch.weekdays.delete(n) : sch.weekdays.add(n);
+    b.setAttribute('aria-pressed', String(sch.weekdays.has(n)));
+  }));
+}
+function scopeValue() { return (document.querySelector('input[name="scope"]:checked') || {}).value || 'series'; }
+function setKind(kind) {
+  sch.kind = kind;
+  els.kindBox.querySelectorAll('[data-kind]').forEach(b => b.classList.toggle('active', b.dataset.kind === kind));
+  updateScheduleFormUI();
+}
+function updateScheduleFormUI() {
+  const editing = !!sch.item, rec = sch.kind === 'recurring';
+  const scope = editing && rec ? scopeValue() : 'series';
+  els.scopeBox.classList.toggle('hidden', !(editing && rec));
+  els.kindBox.classList.toggle('hidden', editing);
+  els.weekdaysBox.classList.toggle('hidden', !rec || scope === 'one');
+  els.rangeBox.classList.toggle('hidden', !rec || scope === 'one');
+  els.singleBox.classList.toggle('hidden', rec);
+  els.schStartDate.disabled = editing && scope === 'following';
+  if (editing && scope === 'following') els.schStartDate.value = sch.date;
+  else if (editing && scope === 'series') els.schStartDate.value = sch.item.start_date || '';
+}
+function openScheduleModal(occ = null) {
+  const date = wsOpen && currentDate ? currentDate : state.selectedDate;
+  const item = occ ? state.items.find(i => i.id === occ.item_id) : null;
+  if (occ && !item) return;
+  sch = { date, occ, item, kind: item ? item.kind : 'recurring', weekdays: new Set(item?.weekdays?.length ? item.weekdays : [C.dbWeekday(date)]) };
+  els.modalTitle.textContent = item ? t('sch.editTitle') : t('sch.newTitle');
+  els.modalDateLabel.textContent = fmtLong(date).toUpperCase();
+  els.schSubject.value = occ ? occ.subject : '';
+  els.schMeta.value = occ ? metaOf(occ) : '';
+  els.schStart.value = occ ? occ.start_time : '';
+  els.schEnd.value = occ ? occ.end_time : '';
+  els.schStartDate.value = item ? (item.start_date || '') : date;
+  els.schEndDate.value = item ? (item.end_date || '') : '';
+  els.schSingleDate.value = item && item.kind === 'single' ? item.single_date : date;
+  document.querySelector('input[name="scope"][value="one"]').checked = true;
+  els.schError.textContent = '';
+  els.deleteScheduleBtn.classList.toggle('hidden', !item);
+  renderWeekdayChips();
+  setKind(sch.kind);
+  els.scheduleModal.classList.remove('hidden');
+  els.schSubject.focus({ preventScroll: true });
+}
+function closeModal() { els.scheduleModal.classList.add('hidden'); sch = null; }
+
+function readScheduleForm() {
+  const subject = els.schSubject.value.trim();
+  const meta = els.schMeta.value.trim();
+  const origMeta = sch.occ ? metaOf(sch.occ) : '';
+  let room, teacher;
+  if (sch.occ && meta === origMeta) { room = sch.occ.room; teacher = sch.occ.teacher; }
+  else { const p = meta.split(' · ').map(s => s.trim()); room = p[0] || ''; teacher = p[1] || ''; }
+  return { subject, room, teacher, start_time: C.normTime(els.schStart.value), end_time: C.normTime(els.schEnd.value) };
 }
 
-function renderNote(preserveEditor = false) {
-  const html = state.notes[state.selectedDay] || '';
-  if (!preserveEditor) els.noteEditor.innerHTML = html;
-  const savedFont = state.fonts[state.selectedDay] || 'system';
-  els.fontSelect.value = savedFont;
-  applyFont(savedFont);
-  if (!preserveEditor) markSaved();
+function queueItem(item) { const k = state.items.findIndex(i => i.id === item.id); k >= 0 ? state.items[k] = item : state.items.push(item); enqueue({ key:'item:' + item.id, type:'item', id:item.id }); }
+function queueException(e) {
+  const k = state.exceptions.findIndex(x => x.item_id === e.item_id && x.occurrence_date === e.occurrence_date);
+  k >= 0 ? state.exceptions[k] = e : state.exceptions.push(e);
+  enqueue({ key:`ex:${e.item_id}|${e.occurrence_date}`, type:'ex', item_id:e.item_id, date:e.occurrence_date });
+}
+function dropException(itemId, date) {
+  state.exceptions = state.exceptions.filter(x => !(x.item_id === itemId && x.occurrence_date === date));
+  enqueue({ key:`ex:${itemId}|${date}`, type:'ex-delete', item_id:itemId, date });
+}
+function deleteItem(item) {
+  state.items = state.items.filter(i => i.id !== item.id);
+  state.exceptions = state.exceptions.filter(e => e.item_id !== item.id);
+  state.queue = state.queue.filter(q => !(q.key.startsWith('ex:' + item.id + '|')));   // las excepciones caen en cascada en la BD
+  enqueue({ key:'item:' + item.id, type:'item-delete', id:item.id });
 }
 
+function saveSchedule() {
+  const f = readScheduleForm(), err = k => { els.schError.textContent = t(k); };
+  const item = sch.item, date = sch.date;
+  const scope = item && sch.kind === 'recurring' ? scopeValue() : 'series';
+  if (!f.subject) return err('sch.errSubject');
+  if (f.start_time && f.end_time && f.end_time <= f.start_time) return err('sch.errTime');
+  const weekdays = [...sch.weekdays].sort();
+  let startDate = els.schStartDate.value || null, endDate = els.schEndDate.value || null, singleDate = els.schSingleDate.value;
+  if (sch.kind === 'recurring' && scope !== 'one') {
+    if (!weekdays.length) return err('sch.errDays');
+    if (startDate && !C.isISO(startDate) || endDate && !C.isISO(endDate)) return err('sch.errDate');
+    if (startDate && endDate && endDate < startDate) return err('sch.errRange');
+  }
+  if (sch.kind === 'single' && !C.isISO(singleDate)) return err('sch.errDate');
+
+  if (!item) {
+    queueItem(sch.kind === 'single'
+      ? { id:uuid(), kind:'single', ...f, color:'', weekdays:[], start_date:null, end_date:null, single_date:singleDate, position:state.items.length, legacy_schedule_id:null }
+      : { id:uuid(), kind:'recurring', ...f, color:'', weekdays, start_date:startDate, end_date:endDate, single_date:null, position:state.items.length, legacy_schedule_id:null });
+  } else if (item.kind === 'single') {
+    queueItem({ ...item, ...f, single_date:singleDate });
+  } else if (scope === 'one') {
+    // Solo se guardan los campos que cambian respecto a la serie; así el resto sigue heredando de ella.
+    const diff = {}; let changed = false;
+    ['subject', 'room', 'teacher', 'start_time', 'end_time'].forEach(k => { if ((f[k] || '') !== (item[k] || '')) { diff[k] = f[k] || null; changed = true; } });
+    if (changed) queueException({ item_id:item.id, occurrence_date:date, action:'override', subject:null, room:null, teacher:null, start_time:null, end_time:null, ...diff });
+    else if (state.exceptions.some(x => x.item_id === item.id && x.occurrence_date === date)) dropException(item.id, date);
+  } else if (scope === 'following') {
+    const split = C.splitSeries(item, date, { ...f, weekdays, end_date:endDate }, uuid());
+    if (!split) queueItem({ ...item, ...f, weekdays, end_date:endDate });    // no hay historial previo: equivale a la serie completa
+    else {
+      queueItem(split.closed); queueItem({ ...split.fresh, position:item.position });
+      // Las modificaciones puntuales de fechas futuras siguen a la nueva serie
+      state.exceptions.filter(e => e.item_id === item.id && e.occurrence_date >= date).forEach(e => { dropException(item.id, e.occurrence_date); queueException({ ...e, item_id:split.fresh.id }); });
+    }
+  } else {
+    queueItem({ ...item, ...f, weekdays, start_date:startDate, end_date:endDate });
+  }
+  afterScheduleChange(t('sch.saved'));
+}
+
+function deleteSchedule() {
+  const item = sch.item, date = sch.date; if (!item) return;
+  const scope = item.kind === 'recurring' ? scopeValue() : 'single';
+  const msg = scope === 'series' ? t('sch.deleteConfirmSeries') : scope === 'following' ? t('sch.deleteConfirmFollowing') : scope === 'single' ? t('sch.deleteConfirmSingle') : null;
+  if (msg && !confirm(msg)) return;
+  if (scope === 'single' || scope === 'series') deleteItem(item);
+  else if (scope === 'one') queueException({ item_id:item.id, occurrence_date:date, action:'skip', subject:null, room:null, teacher:null, start_time:null, end_time:null });
+  else {
+    if (item.start_date && date <= item.start_date) deleteItem(item);
+    else {
+      queueItem({ ...item, end_date:C.addDays(date, -1) });
+      state.exceptions.filter(e => e.item_id === item.id && e.occurrence_date >= date).forEach(e => dropException(item.id, e.occurrence_date));
+    }
+  }
+  afterScheduleChange(t('sch.deleted'));
+}
+function afterScheduleChange(msg) { closeModal(); renderAll(); showToastFn(msg); }
+
+// =====================  ESPACIO DE TRABAJO DIARIO  =====================
+function setOrigin(el) {
+  const r = el && el.getBoundingClientRect ? el.getBoundingClientRect() : null;
+  const x = r && r.width ? r.left + r.width / 2 : window.innerWidth / 2, y = r && r.height ? r.top + r.height / 2 : window.innerHeight / 3;
+  document.documentElement.style.setProperty('--ox', `${Math.round(x)}px`);
+  document.documentElement.style.setProperty('--oy', `${Math.round(y)}px`);
+}
+function openWorkspace(iso, originEl) {
+  if (wsOpen) return;
+  setViewToDate(iso); state.selectedDate = iso;
+  renderCalendar(); renderAgenda();
+  setOrigin(originEl || els.calGrid.querySelector('.selected') || els.openDayBtn);
+  wsOpen = true;
+  els.workspace.inert = false; els.workspace.setAttribute('aria-hidden', 'false');
+  document.body.classList.add('ws-open');
+  try { history.pushState({ noti:'ws' }, ''); wsPushed = true; } catch { wsPushed = false; }
+  setMode('write');
+  loadDay(iso);
+  syncViewport();
+  setTimeout(() => els.wsBack.focus({ preventScroll:true }), 60);
+}
+let closing = false;
+async function closeWorkspace() {
+  if (!wsOpen || closing) return;
+  closing = true;
+  try {
+    await flushDay();
+    wsOpen = false; currentDate = null;
+    renderAll();                                           // actualiza los indicadores del calendario
+    setOrigin(els.calGrid.querySelector('.selected'));
+    document.body.classList.remove('ws-open');
+    els.workspace.inert = true; els.workspace.setAttribute('aria-hidden', 'true');
+    els.workspace.style.height = ''; els.workspace.style.top = '';
+    els.calGrid.querySelector('.selected')?.focus({ preventScroll:true });
+  } finally { closing = false; }
+}
+function requestCloseWorkspace() {
+  if (wsPushed) { wsPushed = false; try { history.back(); return; } catch {} }
+  closeWorkspace();
+}
+async function changeDay(delta) {
+  await flushDay();
+  const iso = C.addDays(currentDate, delta);
+  setViewToDate(iso); loadDay(iso); renderCalendar();
+}
+function loadDay(iso) {
+  currentDate = iso; state.selectedDate = iso;
+  renderWsHeader(); renderWsSchedule(); renderAgenda();
+  loadNoteIntoEditor(); renderLegacyBanner(); loadDrawing(iso); refreshStatuses();
+  els.calGrid.querySelectorAll('.cal-cell').forEach(c => c.classList.toggle('selected', c.dataset.iso === iso));
+}
+function renderWsHeader() {
+  if (!currentDate) return;
+  els.wsWeekday.textContent = dayName(dayIdOf(currentDate)) + (currentDate === C.todayISO() ? ` · ${t('cal.today')}` : '');
+  els.wsDate.textContent = fmtLong(currentDate);
+}
+function renderWsSchedule() {
+  if (!currentDate) return;
+  const rows = occurrencesFor(currentDate);
+  els.wsSchedule.innerHTML = rows.map((o, i) => `<button class="ws-chip" type="button" data-i="${i}"><b>${escapeHtml(o.start_time || '··:··')}</b><span>${escapeHtml(o.subject || t('schedule.noName'))}</span></button>`).join('')
+    + `<button class="ws-chip add" type="button" data-add="1">${t('ws.addChip')}</button>`;
+  els.wsSchedule.querySelectorAll('[data-i]').forEach(b => b.addEventListener('click', () => openScheduleModal(rows[Number(b.dataset.i)])));
+  els.wsSchedule.querySelector('[data-add]').addEventListener('click', () => openScheduleModal());
+}
+
+function syncViewport() {
+  const vv = window.visualViewport;
+  if (vv && wsOpen) { els.workspace.style.height = vv.height + 'px'; els.workspace.style.top = vv.offsetTop + 'px'; }
+  layoutCanvas();
+}
+function setMode(mode) {
+  els.workspace.dataset.mode = mode;
+  els.modeWrite.classList.toggle('active', mode === 'write'); els.modeWrite.setAttribute('aria-pressed', String(mode === 'write'));
+  els.modeDraw.classList.toggle('active', mode === 'draw'); els.modeDraw.setAttribute('aria-pressed', String(mode === 'draw'));
+  els.textTools.classList.toggle('hidden', mode !== 'write');
+  els.drawTools.classList.toggle('hidden', mode !== 'draw');
+  els.noteRestore.classList.toggle('hidden', mode !== 'draw');
+  if (mode === 'draw') { commitNoteNow(); if (document.activeElement === els.noteEditor) els.noteEditor.blur(); }
+  requestAnimationFrame(layoutCanvas);
+}
+function renderCenterBtn() {
+  const on = els.workspace.classList.contains('centered');
+  els.centerNoteBtn.setAttribute('aria-pressed', String(on));
+  els.centerNoteBtn.classList.toggle('active', on);
+  els.centerNoteBtn.title = on ? t('ws.uncenter') : t('ws.center');
+  els.centerNoteBtn.setAttribute('aria-label', els.centerNoteBtn.title);
+}
+function toggleCenter() { els.workspace.classList.toggle('centered'); renderCenterBtn(); }
+
+// ---- Estado de guardado ----
+let noteTimer = null;
+function setStat(el, kind) {
+  el.textContent = kind === 'saving' ? t('sync.saving') : kind === 'pending' ? t('sync.pending') : t('sync.synced');
+  el.classList.toggle('ok', kind === 'saved');
+}
+function refreshStatuses() {
+  if (!currentDate) return;
+  const net = navigator.onLine && state.cloudReady && !syncFailed;
+  setStat(els.saveStatus, noteTimer ? 'saving' : isQueued('note:' + currentDate) ? (net ? 'saving' : 'pending') : 'saved');
+  setStat(els.drawingStatus, drawing.dirty ? 'saving' : isQueued('drawing:' + currentDate) ? (net ? 'saving' : 'pending') : 'saved');
+}
+
+// ---- Notas ----
+function loadNoteIntoEditor() {
+  const n = state.notes[currentDate];
+  els.noteEditor.innerHTML = n?.content || '';
+  const font = n?.font || 'system';
+  els.fontSelect.value = font; applyFont(font);
+}
+function syncEditorFromState() {
+  if (!wsOpen || document.activeElement === els.noteEditor) return;
+  const n = state.notes[currentDate], html = n?.content || '';
+  if (els.noteEditor.innerHTML !== html) els.noteEditor.innerHTML = html;
+  const font = n?.font || 'system'; els.fontSelect.value = font; applyFont(font);
+}
 const FONT_CLASSES = ['font-system','font-serif','font-mono','font-arial','font-helvetica','font-times','font-garamond','font-trebuchet','font-verdana','font-courier'];
-function applyFont(font) {
-  els.noteEditor.classList.remove(...FONT_CLASSES);
-  els.noteEditor.classList.add(`font-${font}`);
+function applyFont(font) { els.noteEditor.classList.remove(...FONT_CLASSES); els.noteEditor.classList.add(`font-${font}`); }
+function fontFamilyForCommand(font) {
+  return { serif:'Georgia', mono:'Consolas', arial:'Arial', helvetica:'Helvetica Neue', times:'Times New Roman', garamond:'Garamond', trebuchet:'Trebuchet MS', verdana:'Verdana', courier:'Courier New' }[font] || 'Inter';
 }
+function commitNote(date, content, font) {
+  const prev = state.notes[date];
+  state.notes[date] = { content, font };
+  if (!prev && !noteHasContent(content)) { refreshStatuses(); return; }   // nota vacía y nueva: no se crea fila
+  saveLocal();
+  enqueue({ key:'note:' + date, type:'note', date });
+}
+function commitNoteNow() {
+  clearTimeout(noteTimer); noteTimer = null;
+  if (!currentDate) return;
+  commitNote(currentDate, els.noteEditor.innerHTML, els.fontSelect.value);
+  renderCalendar();
+}
+function scheduleNoteSave() {
+  setStat(els.saveStatus, 'saving');
+  clearTimeout(noteTimer);
+  noteTimer = setTimeout(commitNoteNow, 500);
+}
+
+// Selección: se recuerda para que los controles del dock no la pierdan
+document.addEventListener('selectionchange', () => {
+  const s = window.getSelection();
+  if (s && s.rangeCount && els.noteEditor.contains(s.anchorNode)) savedRange = s.getRangeAt(0).cloneRange();
+});
+function restoreSelection() {
+  const live = window.getSelection();
+  if (live && live.rangeCount && els.noteEditor.contains(live.anchorNode)) { els.noteEditor.focus({ preventScroll:true }); return; }   // la selección viva sigue siendo válida
+  els.noteEditor.focus({ preventScroll:true });
+  if (savedRange) { const s = window.getSelection(); s.removeAllRanges(); s.addRange(savedRange); }
+}
+function hasTextSelection() { const s = window.getSelection(); return s && s.rangeCount && !s.isCollapsed && els.noteEditor.contains(s.anchorNode); }
 
 function applySelectedFont(font) {
-  const selection = window.getSelection();
-  if (selection && selection.rangeCount && !selection.isCollapsed && els.noteEditor.contains(selection.anchorNode)) {
-    els.noteEditor.focus();
-    document.execCommand('fontName', false, font === 'system' ? 'Inter' : fontFamilyForCommand(font));
-  } else {
-    applyFont(font);
-  }
-  state.fonts[state.selectedDay] = font;
-  saveCurrentNote(false);
+  restoreSelection();
+  if (hasTextSelection()) document.execCommand('fontName', false, font === 'system' ? 'Inter' : fontFamilyForCommand(font));
+  else applyFont(font);
+  commitNoteNow();
 }
-
-function fontFamilyForCommand(font) {
-  return {
-    serif:'Georgia', mono:'Consolas', arial:'Arial', helvetica:'Helvetica Neue', times:'Times New Roman', garamond:'Garamond', trebuchet:'Trebuchet MS', verdana:'Verdana', courier:'Courier New'
-  }[font] || 'Inter';
-}
-
 function applyTextSize(size) {
-  const selection = window.getSelection();
-  if (!selection || !selection.rangeCount || selection.isCollapsed || !els.noteEditor.contains(selection.anchorNode)) {
-    showToastFn(preferences.language === 'es' ? 'Selecciona el texto al que quieres aplicar el tamaño.' : 'Select the text you want to resize.');
-    return;
-  }
-  els.noteEditor.focus();
+  restoreSelection();
+  if (!hasTextSelection()) { showToastFn(t('notes.selectSize')); return; }
+  document.execCommand('styleWithCSS', false, false);   // el resaltador activa el modo CSS; sin esto fontSize no generaba <font size=7>
   document.execCommand('fontSize', false, '7');
-  els.noteEditor.querySelectorAll('font[size="7"]').forEach(node => {
+  els.noteEditor.querySelectorAll('font[size="7"], span[style*="xxx-large"]').forEach(node => {
     const span = document.createElement('span');
-    span.style.fontSize = `${size}px`;
-    span.innerHTML = node.innerHTML;
-    node.replaceWith(span);
+    span.style.fontSize = `${size}px`; span.innerHTML = node.innerHTML; node.replaceWith(span);
   });
-  saveCurrentNote(false);
+  commitNoteNow();
 }
-
 function applyHighlight() {
-  els.noteEditor.focus();
-  const selection = window.getSelection();
-  if (!selection || !selection.rangeCount || selection.isCollapsed || !els.noteEditor.contains(selection.anchorNode)) {
-    showToastFn(preferences.language === 'es' ? 'Selecciona el texto que quieres resaltar.' : 'Select the text you want to highlight.');
-    return;
-  }
+  restoreSelection();
+  if (!hasTextSelection()) { showToastFn(t('notes.selectHighlight')); return; }
   document.execCommand('hiliteColor', false, '#fff1a8');
-  els.highlightBtn.classList.add('active');
-  saveCurrentNote(false);
+  commitNoteNow();
+}
+function insertChecklist() {
+  restoreSelection();
+  const row = document.createElement('div');
+  row.className = 'check-item';
+  row.innerHTML = `<input type="checkbox"><span contenteditable="true">${t('editor.task')}</span>`;
+  const sel = window.getSelection();
+  if (sel && sel.rangeCount && els.noteEditor.contains(sel.getRangeAt(0).commonAncestorContainer)) {
+    const range = sel.getRangeAt(0); range.deleteContents(); range.insertNode(row);
+    range.setStartAfter(row); range.collapse(true); sel.removeAllRanges(); sel.addRange(range);
+  } else els.noteEditor.appendChild(row);
+  commitNoteNow();
 }
 
-async function saveCurrentNote(showToast = false) {
-  if (!user) return;
-  const content = els.noteEditor.innerHTML;
-  const font = els.fontSelect.value;
-  state.notes[state.selectedDay] = content;
-  state.fonts[state.selectedDay] = font;
-  saveLocalState();
-  markSaving();
-  try {
-    await upsertNote(state.selectedDay, content, font, false);
-    markSaved();
-    if (showToast) showToastFn(t('sync.noteSaved'));
-  } catch (error) {
-    setSyncStatus(t('sync.limited'), 'warning');
-    els.saveStatus.textContent = 'Guardado local';
-    console.warn('No se pudo guardar nota:', error.message);
+// ---- Importar datos de Noti 3.0 (notas/dibujos por día de la semana), siempre a petición ----
+function renderLegacyBanner() {
+  if (!currentDate) return;
+  const id = dayIdOf(currentDate), box = els.legacyBanner, parts = [];
+  const lNote = state.legacy.notes[id], lDraw = state.legacy.drawings[id];
+  const noteHere = noteHasContent(state.notes[currentDate]?.content) || noteHasContent(els.noteEditor.innerHTML);
+  if (noteHasContent(lNote) && !noteHere) parts.push(`<span>${escapeHtml(t('legacy.note', { day: dayName(id).toLowerCase() }))}</span><button class="tool-btn" data-import="note" type="button">${t('legacy.importNote')}</button>`);
+  if (lDraw && !state.drawingIndex[currentDate] && !drawing.hasInk) parts.push(`<span>${escapeHtml(t('legacy.drawing', { day: dayName(id).toLowerCase() }))}</span><button class="tool-btn" data-import="drawing" type="button">${t('legacy.importDrawing')}</button>`);
+  box.classList.toggle('hidden', !parts.length);
+  box.innerHTML = parts.join('');
+  box.querySelectorAll('[data-import]').forEach(b => b.addEventListener('click', () => b.dataset.import === 'note' ? importLegacyNote() : importLegacyDrawing()));
+}
+function importLegacyNote() {
+  const id = dayIdOf(currentDate), font = state.legacy.fonts[id] || 'system';
+  els.noteEditor.innerHTML = state.legacy.notes[id] || '';
+  els.fontSelect.value = font; applyFont(font);
+  commitNoteNow(); renderLegacyBanner(); showToastFn(t('legacy.imported'));
+}
+async function importLegacyDrawing() {
+  const src = state.legacy.drawings[dayIdOf(currentDate)]; if (!src) return;
+  const img = await loadImage(src).catch(() => null); if (!img) return;
+  const tmp = document.createElement('canvas'); tmp.width = CANVAS_W; tmp.height = CANVAS_H;
+  const tc = tmp.getContext('2d'), s = Math.min(CANVAS_W / img.width, CANVAS_H / img.height);
+  tc.drawImage(img, (CANVAS_W - img.width * s) / 2, (CANVAS_H - img.height * s) / 2, img.width * s, img.height * s);
+  // Noti 3.0 pintaba el fondo oscuro dentro de la imagen; se vuelve transparente para que funcione en modo claro.
+  const id = tc.getImageData(0, 0, CANVAS_W, CANVAS_H), px = id.data;
+  for (let i = 0; i < px.length; i += 4) if (px[i] < 22 && px[i + 1] < 26 && px[i + 2] < 30) px[i + 3] = 0;
+  tc.putImageData(id, 0, 0);
+  const ctx = els.canvas.getContext('2d');
+  ctx.clearRect(0, 0, CANVAS_W, CANVAS_H); ctx.drawImage(tmp, 0, 0);
+  drawing.hasInk = true; drawing.dirty = true; saveDrawingNow(); renderLegacyBanner(); showToastFn(t('legacy.imported'));
+}
+const loadImage = src => new Promise((res, rej) => { const i = new Image(); i.onload = () => res(i); i.onerror = rej; i.src = src; });
+
+// ---- Lienzo (superficie lógica fija 1600×1200; transparente: flota sobre el espacio de trabajo) ----
+function layoutCanvas() {
+  const w = els.wsStage.clientWidth, h = els.wsStage.clientHeight; if (!w || !h) return;   // clientWidth ignora el zoom de la transición
+  const s = Math.min((w - 4) / CANVAS_W, (h - 4) / CANVAS_H);
+  els.canvas.style.width = Math.max(80, Math.floor(CANVAS_W * s)) + 'px';
+  els.canvas.style.height = Math.max(60, Math.floor(CANVAS_H * s)) + 'px';
+}
+async function loadDrawing(date) {
+  const token = ++drawing.token;
+  clearTimeout(drawing.timer); drawing.dirty = false; drawing.hasInk = false;
+  const ctx = els.canvas.getContext('2d');
+  ctx.clearRect(0, 0, CANVAS_W, CANVAS_H);
+  let data = getLocalDrawing(date);
+  if (data === undefined && state.drawingIndex[date] && state.cloudReady && navigator.onLine) {
+    els.drawingStatus.textContent = t('drawing.loading');
+    try {
+      const { data: row, error } = await supabaseClient.from('drawings_by_date').select('drawing_data').eq('user_id', user.id).eq('drawing_date', date).maybeSingle();
+      if (error) throw error;
+      data = row?.drawing_data || '';
+      try { data ? localStorage.setItem(drawingKey(date), data) : null; } catch {}
+      state.drawings[date] = data;
+    } catch (e) { console.warn('No se pudo cargar el dibujo:', e.message); }
   }
-}
-
-function renderCanvas() {
-  const canvas = els.canvas;
-  const rect = canvas.getBoundingClientRect();
-  const dpr = Math.max(1, Math.min(window.devicePixelRatio || 1, 2));
-  drawing.dpr = dpr;
-  const old = state.drawings[state.selectedDay];
-  canvas.width = Math.max(1, Math.floor(rect.width * dpr));
-  canvas.height = Math.max(1, Math.floor(rect.height * dpr));
-  const ctx = canvas.getContext('2d');
-  ctx.setTransform(dpr,0,0,dpr,0,0);
-  ctx.fillStyle = '#070a0e';
-  ctx.fillRect(0,0,rect.width,rect.height);
-  if (old) {
-    const img = new Image();
-    img.onload = () => ctx.drawImage(img, 0, 0, rect.width, rect.height);
-    img.src = old;
+  if (token !== drawing.token || currentDate !== date) return;
+  if (data) {
+    const img = await loadImage(data).catch(() => null);
+    if (img && token === drawing.token) { ctx.drawImage(img, 0, 0, CANVAS_W, CANVAS_H); drawing.hasInk = true; }
   }
+  renderLegacyBanner(); refreshStatuses();
 }
-
-async function saveDrawing(showToast = false) {
-  if (!user) return;
-  const canvas = els.canvas;
-  const small = document.createElement('canvas');
-  const targetW = 1000;
-  const rect = canvas.getBoundingClientRect();
-  const ratio = targetW / Math.max(1, rect.width);
-  small.width = targetW;
-  small.height = Math.max(1, Math.round(rect.height * ratio));
-  const sctx = small.getContext('2d');
-  sctx.fillStyle = '#070a0e';
-  sctx.fillRect(0,0,small.width,small.height);
-  sctx.drawImage(canvas,0,0,small.width,small.height);
-  const data = small.toDataURL('image/webp', 0.72);
-  state.drawings[state.selectedDay] = data;
-  saveLocalState();
-  els.drawingStatus.textContent = t('sync.saving');
-  try {
-    await upsertDrawing(state.selectedDay, data, false);
-    els.drawingStatus.textContent = t('sync.synced');
-    if (showToast) showToastFn(t('sync.drawingSaved'));
-  } catch (error) {
-    setSyncStatus(t('sync.limited'), 'warning');
-    els.drawingStatus.textContent = t('sync.localSaved');
-    console.warn('No se pudo guardar dibujo:', error.message);
-  }
+function commitDrawing(date, data) {
+  const had = !!state.drawingIndex[date];
+  if (!data && !had) return;
+  setLocalDrawing(date, data);
+  if (data) state.drawingIndex[date] = new Date().toISOString(); else delete state.drawingIndex[date];
+  saveLocal();
+  enqueue({ key:'drawing:' + date, type:'drawing', date });
 }
-
+function saveDrawingNow() {
+  clearTimeout(drawing.timer);
+  if (!drawing.dirty || !currentDate) return;
+  const o = document.createElement('canvas'); o.width = EXPORT_W; o.height = EXPORT_H;
+  o.getContext('2d').drawImage(els.canvas, 0, 0, EXPORT_W, EXPORT_H);
+  drawing.dirty = false;
+  commitDrawing(currentDate, drawing.hasInk ? o.toDataURL('image/webp', 0.8) : '');
+  renderCalendar();
+}
 function pointerPos(ev) {
-  const rect = els.canvas.getBoundingClientRect();
-  return { x: ev.clientX - rect.left, y: ev.clientY - rect.top };
+  const r = els.canvas.getBoundingClientRect();
+  return { x:(ev.clientX - r.left) * CANVAS_W / r.width, y:(ev.clientY - r.top) * CANVAS_H / r.height, k:CANVAS_W / r.width };
 }
-
 function beginDraw(ev) {
-  ev.preventDefault();
-  els.canvas.setPointerCapture?.(ev.pointerId);
-  const p = pointerPos(ev);
-  drawing.active = true;
-  drawing.lastX = p.x;
-  drawing.lastY = p.y;
-  drawTo(p.x, p.y, p.x, p.y);
+  if (els.workspace.dataset.mode !== 'draw') return;
+  ev.preventDefault(); els.canvas.setPointerCapture?.(ev.pointerId);
+  const p = pointerPos(ev); drawing.active = true; drawing.lastX = p.x; drawing.lastY = p.y; drawTo(p.x, p.y, p.x, p.y, p.k);
 }
-
-function moveDraw(ev) {
-  if (!drawing.active) return;
-  ev.preventDefault();
-  const p = pointerPos(ev);
-  drawTo(drawing.lastX, drawing.lastY, p.x, p.y);
-  drawing.lastX = p.x;
-  drawing.lastY = p.y;
-}
-
+function moveDraw(ev) { if (!drawing.active) return; ev.preventDefault(); const p = pointerPos(ev); drawTo(drawing.lastX, drawing.lastY, p.x, p.y, p.k); drawing.lastX = p.x; drawing.lastY = p.y; }
 function endDraw() {
   if (!drawing.active) return;
-  drawing.active = false;
-  saveDrawing();
+  drawing.active = false; drawing.dirty = true; if (!drawing.erasing) drawing.hasInk = true;
+  setStat(els.drawingStatus, 'saving'); clearTimeout(drawing.timer); drawing.timer = setTimeout(saveDrawingNow, 600);
 }
-
-function drawTo(x1,y1,x2,y2) {
+function drawTo(x1, y1, x2, y2, k) {
   const ctx = els.canvas.getContext('2d');
-  ctx.save();
-  ctx.lineCap = 'round';
-  ctx.lineJoin = 'round';
-  ctx.lineWidth = Number(els.brushSize.value);
-  ctx.strokeStyle = drawing.erasing ? '#070a0e' : els.brushColor.value;
-  ctx.beginPath();
-  ctx.moveTo(x1,y1);
-  ctx.lineTo(x2,y2);
-  ctx.stroke();
-  ctx.restore();
+  ctx.save(); ctx.lineCap = 'round'; ctx.lineJoin = 'round';
+  ctx.lineWidth = Number(els.brushSize.value) * k;
+  ctx.globalCompositeOperation = drawing.erasing ? 'destination-out' : 'source-over';
+  ctx.strokeStyle = els.brushColor.value;
+  ctx.beginPath(); ctx.moveTo(x1, y1); ctx.lineTo(x2, y2); ctx.stroke(); ctx.restore();
 }
-
 function setEraser(next) {
   drawing.erasing = next;
   els.eraserBtn.classList.toggle('active', next);
   els.eraserBtn.textContent = next ? '✎ ' + t('drawing.pencil') : '⌫ ' + t('drawing.eraser');
   els.eraserBtn.title = next ? t('drawing.pencil') : t('drawing.eraser');
+  els.eraserBtn.style.width = 'auto'; els.eraserBtn.style.padding = '0 12px';
+}
+function clearCanvas() {
+  els.canvas.getContext('2d').clearRect(0, 0, CANVAS_W, CANVAS_H);
+  drawing.hasInk = false; drawing.dirty = true; saveDrawingNow(); renderLegacyBanner();
+}
+async function flushDay() {
+  if (!user || !currentDate) return;
+  if (noteTimer) commitNoteNow();
+  if (drawing.dirty) saveDrawingNow();
 }
 
-async function clearCanvas() {
-  const ctx = els.canvas.getContext('2d');
-  const rect = els.canvas.getBoundingClientRect();
-  ctx.fillStyle = '#070a0e';
-  ctx.fillRect(0,0,rect.width,rect.height);
-  state.drawings[state.selectedDay] = '';
-  saveLocalState();
-  await saveDrawing();
-}
-
-function openScheduleModal(editIndex = null) {
-  const rows = scheduleFor(state.selectedDay);
-  const working = editIndex === null
-    ? [...rows, { time:'', subject:'', meta:'' }]
-    : rows.map(r => ({...r}));
-  els.scheduleRows.innerHTML = '';
-  working.forEach(row => addScheduleFormRow(row));
-  els.scheduleModal.classList.remove('hidden');
-  els.scheduleModal.dataset.editIndex = editIndex === null ? '' : String(editIndex);
-}
-
-function addScheduleFormRow(row = {time:'',subject:'',meta:''}) {
-  const wrapper = document.createElement('div');
-  wrapper.className = 'schedule-form-row';
-  wrapper.innerHTML = `
-    <input class="time-input" aria-label="${t('schedule.time')}" placeholder="${t('schedule.timePlaceholder')}" value="${escapeAttr(row.time)}">
-    <input class="subject-input" aria-label="${t('schedule.subject')}" placeholder="${t('schedule.subjectPlaceholder')}" value="${escapeAttr(row.subject)}">
-    <input class="meta-input" aria-label="${t('schedule.detail')}" placeholder="${t('schedule.detailPlaceholder')}" value="${escapeAttr(row.meta)}">
-    <button class="tool-btn remove-row" type="button" title="${t('schedule.remove')}">×</button>
-  `;
-  wrapper.querySelector('.remove-row').addEventListener('click', () => wrapper.remove());
-  els.scheduleRows.appendChild(wrapper);
-}
-
-function closeModal() { els.scheduleModal.classList.add('hidden'); }
-
-async function saveSchedule() {
-  const result = [...els.scheduleRows.querySelectorAll('.schedule-form-row')]
-    .map(row => ({
-      time: row.querySelector('.time-input').value.trim(),
-      subject: row.querySelector('.subject-input').value.trim(),
-      meta: row.querySelector('.meta-input').value.trim()
-    }))
-    .filter(r => r.time || r.subject || r.meta);
-  state.schedules[state.selectedDay] = result;
-  saveLocalState();
-  setSyncStatus(t('sync.saving'), 'loading');
-  try {
-    await replaceSchedules(state.selectedDay, result);
-    renderSchedule();
-    closeModal();
-    setSyncStatus(t('sync.synced'), 'success');
-  } catch (error) {
-    renderSchedule();
-    closeModal();
-    setSyncStatus(t('sync.limited'), 'warning');
-    showToastFn(t('sync.scheduleLocal'));
-    console.warn('No se pudo guardar horario:', error.message);
-  }
-}
-
-function showToastFn(message) {
-  els.toast.textContent = message;
-  els.toast.classList.add('show');
-  clearTimeout(showToastFn.timer);
-  showToastFn.timer = setTimeout(() => els.toast.classList.remove('show'), 1800);
-}
-
-function escapeHtml(value) {
-  return String(value).replace(/[&<>'"]/g, ch => ({'&':'&amp;','<':'&lt;','>':'&gt;',"'":'&#39;','"':'&quot;'}[ch]));
-}
-function escapeAttr(value) { return escapeHtml(value).replace(/`/g, '&#96;'); }
-
-function insertChecklist() {
-  els.noteEditor.focus();
-  const row = document.createElement('div');
-  row.className = 'check-item';
-  row.innerHTML = `<input type="checkbox"><span contenteditable="true">${t('editor.task')}</span>`;
-  const sel = window.getSelection();
-  if (sel && sel.rangeCount) {
-    const range = sel.getRangeAt(0);
-    if (els.noteEditor.contains(range.commonAncestorContainer)) {
-      range.deleteContents();
-      range.insertNode(row);
-      range.setStartAfter(row);
-      range.collapse(true);
-      sel.removeAllRanges();
-      sel.addRange(range);
-    } else {
-      els.noteEditor.appendChild(row);
-    }
-  } else {
-    els.noteEditor.appendChild(row);
-  }
-  saveCurrentNote(true);
-}
-
-async function flushCurrentLocalEdits() {
-  if (!user) return;
-  await Promise.allSettled([saveCurrentNote(false), saveDrawing(false)]);
-}
-
-function renderAll(options = {}) {
-  const day = DAYS.find(d => d.id === state.selectedDay) || DAYS[0];
-  els.dayTitle.textContent = dayName(day.id);
-  els.daySubtitle.textContent = formatDaySubtitle(day.id);
-  renderDayButtons();
-  renderSchedule();
-  renderNote(Boolean(options.preserveEditor));
-  requestAnimationFrame(renderCanvas);
-}
-
-async function handleLogout() {
-  await flushCurrentLocalEdits();
-  if (realtimeChannel) await supabaseClient.removeChannel(realtimeChannel);
-  realtimeChannel = null;
-  await supabaseClient.auth.signOut();
-  user = null;
-  initialized = false;
-  els.appScreen.classList.add('hidden');
-  els.authScreen.classList.remove('hidden');
-  els.authForm.reset();
-  setAuthMode('login');
-  showAuthMessage(t('auth.loggedOut'));
-}
-
-// Auth events
+// =====================  EVENTOS  =====================
 els.loginTab.addEventListener('click', () => setAuthMode('login'));
 els.signupTab.addEventListener('click', () => setAuthMode('signup'));
 els.authForm.addEventListener('submit', handleAuthSubmit);
 els.logoutBtn.addEventListener('click', handleLogout);
+async function handleLogout() {
+  if (wsOpen) { wsPushed = false; await closeWorkspace(); }
+  await flushQueue();
+  clearTimeout(flushTimer);
+  if (realtimeChannel) await supabaseClient.removeChannel(realtimeChannel);
+  realtimeChannel = null;
+  await supabaseClient.auth.signOut();
+  user = null; initialized = false; state = newState();
+  els.appScreen.classList.add('hidden'); els.authScreen.classList.remove('hidden');
+  els.authForm.reset(); setAuthMode('login'); showAuthMessage(t('auth.loggedOut'));
+}
 els.settingsBtn.addEventListener('click', openSettings);
 els.closeSettingsBtn.addEventListener('click', closeSettings);
 els.closeSettingsFooterBtn.addEventListener('click', closeSettings);
@@ -955,104 +1139,109 @@ els.languageSelect.addEventListener('change', () => changePreferences({ language
 els.lightModeBtn.addEventListener('click', () => changePreferences({ theme:'light' }));
 els.darkModeBtn.addEventListener('click', () => changePreferences({ theme:'dark' }));
 
-// Text editor events
-els.noteEditor.addEventListener('input', () => {
-  markSaving();
-  clearTimeout(els.noteEditor.saveTimer);
-  els.noteEditor.saveTimer = setTimeout(() => saveCurrentNote(false), 500);
+// Calendario
+els.calPrev.addEventListener('click', () => shiftMonth(-1));
+els.calNext.addEventListener('click', () => shiftMonth(1));
+els.calToday.addEventListener('click', goToday);
+els.openDayBtn.addEventListener('click', () => openWorkspace(state.selectedDate, els.calGrid.querySelector('.selected') || els.openDayBtn));
+els.editScheduleBtn.addEventListener('click', () => openScheduleModal());
+
+// Espacio diario
+els.wsBack.addEventListener('click', requestCloseWorkspace);
+els.wsPrevDay.addEventListener('click', () => changeDay(-1));
+els.wsNextDay.addEventListener('click', () => changeDay(1));
+els.modeWrite.addEventListener('click', () => setMode('write'));
+els.modeDraw.addEventListener('click', () => setMode('draw'));
+els.noteRestore.addEventListener('click', () => setMode('write'));
+els.centerNoteBtn.addEventListener('click', toggleCenter);
+$('wsDock').addEventListener('mousedown', ev => { if (ev.target.closest('button')) ev.preventDefault(); });   // los botones no quitan el foco/selección del editor
+els.noteEditor.addEventListener('input', () => { scheduleNoteSave(); if (!els.legacyBanner.classList.contains('hidden')) renderLegacyBanner(); });
+els.noteEditor.addEventListener('change', ev => {       // el estado de un checkbox no se serializa en innerHTML: se refleja como atributo
+  if (ev.target.type === 'checkbox') { ev.target.toggleAttribute('checked', ev.target.checked); scheduleNoteSave(); }
 });
-document.querySelectorAll('[data-command]').forEach(btn => {
-  btn.addEventListener('click', () => {
-    els.noteEditor.focus();
-    document.execCommand(btn.dataset.command, false, null);
-    saveCurrentNote(false);
-  });
-});
+els.noteEditor.addEventListener('blur', () => { if (noteTimer) commitNoteNow(); });
+document.querySelectorAll('[data-command]').forEach(btn => btn.addEventListener('click', () => { restoreSelection(); document.execCommand(btn.dataset.command, false, null); commitNoteNow(); }));
 els.fontSelect.addEventListener('change', () => applySelectedFont(els.fontSelect.value));
 els.fontSizeSelect.addEventListener('change', () => applyTextSize(Number(els.fontSizeSelect.value)));
 els.highlightBtn.addEventListener('click', applyHighlight);
 els.checklistBtn.addEventListener('click', insertChecklist);
 
-// Drawing events
+// Lienzo
+els.canvas.width = CANVAS_W; els.canvas.height = CANVAS_H; layoutCanvas();
 els.canvas.addEventListener('pointerdown', beginDraw);
 els.canvas.addEventListener('pointermove', moveDraw);
 els.canvas.addEventListener('pointerup', endDraw);
 els.canvas.addEventListener('pointercancel', endDraw);
-els.canvas.addEventListener('pointerleave', endDraw);
 els.brushSize.addEventListener('input', () => els.brushSizeValue.textContent = els.brushSize.value);
+els.brushColor.addEventListener('input', () => { drawing.colorTouched = true; setEraser(false); });
 els.eraserBtn.addEventListener('click', () => setEraser(!drawing.erasing));
-els.clearCanvasBtn.addEventListener('click', async () => {
-  if (confirm(t('drawing.confirm'))) await clearCanvas();
-});
+els.clearCanvasBtn.addEventListener('click', () => { if (confirm(t('drawing.confirm'))) clearCanvas(); });
 
-// Schedule modal
-
-document.getElementById('editScheduleBtn').addEventListener('click', () => openScheduleModal());
-els.addScheduleRowBtn.addEventListener('click', () => addScheduleFormRow());
+// Modal de actividad
+els.kindBox.querySelectorAll('[data-kind]').forEach(b => b.addEventListener('click', () => setKind(b.dataset.kind)));
+document.querySelectorAll('input[name="scope"]').forEach(r => r.addEventListener('change', updateScheduleFormUI));
 els.saveScheduleBtn.addEventListener('click', saveSchedule);
+els.deleteScheduleBtn.addEventListener('click', deleteSchedule);
 els.cancelScheduleBtn.addEventListener('click', closeModal);
 els.closeModalBtn.addEventListener('click', closeModal);
-els.scheduleModal.addEventListener('click', (ev) => {
-  if (ev.target.dataset.closeModal) closeModal();
-});
-document.addEventListener('keydown', (ev) => { if (ev.key === 'Escape') { closeModal(); closeSettings(); } });
+els.scheduleModal.addEventListener('click', ev => { if (ev.target.dataset.closeModal) closeModal(); });
 
-// PWA install flow
-window.addEventListener('beforeinstallprompt', (event) => {
-  event.preventDefault();
-  deferredInstallPrompt = event;
-  els.installBtn.style.display = 'block';
+document.addEventListener('keydown', ev => {
+  if (ev.key !== 'Escape') return;
+  if (!els.scheduleModal.classList.contains('hidden')) closeModal();
+  else if (!els.settingsModal.classList.contains('hidden')) closeSettings();
+  else if (wsOpen) requestCloseWorkspace();
 });
+window.addEventListener('popstate', () => { if (wsOpen) { wsPushed = false; closeWorkspace(); } });
+window.addEventListener('resize', () => { if (wsOpen) syncViewport(); });
+window.visualViewport?.addEventListener('resize', syncViewport);
+window.visualViewport?.addEventListener('scroll', syncViewport);
+window.addEventListener('pagehide', () => { flushDay(); });
+document.addEventListener('visibilitychange', () => {
+  if (!user) return;
+  if (document.hidden) flushDay(); else { onDayRollover(); refreshCloud(); }
+});
+window.addEventListener('online', () => { if (user) { refreshStatuses(); refreshCloud(); } });
+window.addEventListener('offline', () => { if (user) { setSyncStatus(t('sync.localSaved'), 'warning'); refreshStatuses(); } });
+
+// PWA
+window.addEventListener('beforeinstallprompt', event => { event.preventDefault(); deferredInstallPrompt = event; els.installBtn.style.display = 'block'; });
 els.installBtn.addEventListener('click', async () => {
-  if (!deferredInstallPrompt) {
-    showToastFn(t('pwa.installHint'));
-    return;
-  }
-  deferredInstallPrompt.prompt();
-  await deferredInstallPrompt.userChoice;
-  deferredInstallPrompt = null;
+  if (!deferredInstallPrompt) { showToastFn(t('pwa.installHint')); return; }
+  deferredInstallPrompt.prompt(); await deferredInstallPrompt.userChoice; deferredInstallPrompt = null;
 });
-window.addEventListener('appinstalled', () => {
-  showToastFn(t('pwa.installed'));
-  els.installBtn.style.display = 'none';
-});
-
+window.addEventListener('appinstalled', () => { showToastFn(t('pwa.installed')); els.installBtn.style.display = 'none'; });
 if ('serviceWorker' in navigator) {
-  window.addEventListener('load', () => navigator.serviceWorker.register('sw.js').catch(() => {}));
+  const hadController = !!navigator.serviceWorker.controller;
+  let reloaded = false;
+  navigator.serviceWorker.addEventListener('controllerchange', () => { if (hadController && !reloaded) { reloaded = true; location.reload(); } });   // nueva versión → recarga única
+  window.addEventListener('load', () => navigator.serviceWorker.register(`sw.js?v=${APP_VERSION}`, { updateViaCache:'none' }).then(reg => reg.update()).catch(() => {}));
 }
-
-window.addEventListener('resize', () => {
-  if (!els.appScreen.classList.contains('hidden')) renderCanvas();
-});
 
 async function init() {
   fillFontSizes();
-  preferences = normalizePreferences({ ...DEFAULT_PREFERENCES, ...(loadLocalState().preferences || {}) });
+  preferences = normalizePreferences({ ...DEFAULT_PREFERENCES, ...(loadLocalPreferences() || {}) });
   applyPreferences();
   setAuthMode('login');
+  scheduleMidnight();
   const { data } = await supabaseClient.auth.getSession();
   if (data.session?.user) {
-    try {
-      await bootstrapUser(data.session.user);
-    } catch (error) {
+    try { await bootstrapUser(data.session.user); }
+    catch (error) {
       console.error(error);
       setSyncStatus(t('sync.error'), 'warning');
       showAuthMessage(t('auth.loadError'), 'error');
-      els.appScreen.classList.add('hidden');
-      els.authScreen.classList.remove('hidden');
+      els.appScreen.classList.add('hidden'); els.authScreen.classList.remove('hidden');
     }
   }
   supabaseClient.auth.onAuthStateChange((_event, session) => {
     if (!session && user) {
-      user = null;
-      initialized = false;
+      user = null; initialized = false;
       if (realtimeChannel) supabaseClient.removeChannel(realtimeChannel);
       realtimeChannel = null;
-      els.appScreen.classList.add('hidden');
-      els.authScreen.classList.remove('hidden');
-      setAuthMode('login');
+      document.body.classList.remove('ws-open'); wsOpen = false; els.workspace.inert = true;
+      els.appScreen.classList.add('hidden'); els.authScreen.classList.remove('hidden'); setAuthMode('login');
     }
   });
 }
-
 init();
