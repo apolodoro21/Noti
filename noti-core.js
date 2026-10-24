@@ -88,7 +88,17 @@
   }
   const mergeLegacy = (remote, local) => ({ ...(local || {}), ...(remote || {}) });
 
-  const api = { legacyId, legacyPending, legacyMark, mergeLegacy, pad, toISO, parseISO, isISO, todayISO, addDays, addMonths, dbWeekday, isLeap, daysInMonth, monthGrid,
+  // ---- Actividades (0.5.1): sin hora; fecha límite opcional ----
+  const actSort = (x, y) => (Number(!!x.done) - Number(!!y.done)) || (x.due_date || '9999').localeCompare(y.due_date || '9999') || (x.title || '').localeCompare(y.title || '');
+  function activitiesOn(acts, iso, today) { // las de esa fecha; en «hoy» también las pendientes vencidas o sin fecha
+    return (acts || []).filter(a => a.due_date === iso || (iso === today && !a.done && (!a.due_date || a.due_date < today))).sort(actSort);
+  }
+  function upcoming(acts, today, days) { // pendientes con fecha entre hoy y hoy+days (inclusive); sin completadas ni vencidas
+    const end = addDays(today, days);
+    return (acts || []).filter(a => !a.done && a.due_date && a.due_date >= today && a.due_date <= end).sort(actSort);
+  }
+
+  const api = { activitiesOn, upcoming, legacyId, legacyPending, legacyMark, mergeLegacy, pad, toISO, parseISO, isISO, todayISO, addDays, addMonths, dbWeekday, isLeap, daysInMonth, monthGrid,
     normTime, parseLegacyTime, timeRangeLabel, occursOn, resolveForDate, splitSeries };
   if (typeof module !== 'undefined' && module.exports) module.exports = api;
   root.NotiCore = api;

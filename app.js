@@ -1,4 +1,4 @@
-/* Noti 0.5.0 — calendario real, espacio diario y horarios recurrentes.
+/* Noti 0.5.1 — calendario real, espacio diario y horarios recurrentes.
    Basado en Noti 3.0 (mismo Supabase, auth, preferencias, i18n y editor). */
 const SUPABASE_URL = 'https://ueyakwaxvotartkcnyhj.supabase.co';
 const SUPABASE_PUBLISHABLE_KEY = 'sb_publishable_GHLYL_7tgXlpsgB5b7rl5Q_qQ_a-Eai'; // clave pública (anon): la seguridad la imponen las políticas RLS
@@ -6,7 +6,7 @@ const supabaseClient = window.supabase.createClient(SUPABASE_URL, SUPABASE_PUBLI
   auth: { persistSession: true, autoRefreshToken: true, detectSessionInUrl: true }
 });
 const C = window.NotiCore;
-const APP_VERSION = '0.5.0';
+const APP_VERSION = '0.5.1';
 const CANVAS_W = 1600, CANVAS_H = 1200;           // superficie lógica fija: el dibujo es idéntico en cualquier dispositivo
 const EXPORT_W = 1200, EXPORT_H = 900;
 
@@ -32,18 +32,18 @@ function newState() {
   const d = C.parseISO(today);
   return { selectedDate: today, viewYear: d.getFullYear(), viewMonth: d.getMonth(), followToday: true,
     notes: {}, drawings: {}, drawingIndex: {}, items: [], exceptions: [], queue: [],
-    legacy: { notes:{}, drawings:{}, fonts:{} }, legacyImport: {}, cloudReady: true };
+    legacy: { notes:{}, drawings:{}, fonts:{} }, legacyImport: {}, activities: [], cloudReady: true };
 }
 
 const $ = id => document.getElementById(id);
 const els = {};
 ['authScreen','appScreen','authForm','authName','nameField','authEmail','authPassword','authSubmit','authMessage','loginTab','signupTab',
  'welcomeLine','syncStatus','drawingStatus','logoutBtn','settingsBtn','settingsModal','closeSettingsBtn','closeSettingsFooterBtn','languageSelect',
- 'lightModeBtn','darkModeBtn','paletteOptions','settingsSaveStatus','dayTitle','daySubtitle','scheduleList','scheduleCount','noteEditor','fontSelect',
+ 'lightModeBtn','darkModeBtn','paletteOptions','settingsSaveStatus','dayTitle','scheduleList','scheduleCount','noteEditor','fontSelect',
  'fontSizeSelect','highlightBtn','checklistBtn','saveStatus','brushColor','brushSize','brushSizeValue','eraserBtn','clearCanvasBtn','installBtn',
- 'scheduleModal','closeModalBtn','toast','calTitle','calGrid','calWeekdays','calPrev','calNext','calToday','authUsername','usernameField','grayModeBtn','styleOptions','editScheduleBtn',
- 'workspace','wsBack','wsWeekday','wsDate','wsPrevDay','wsNextDay','wsSchedule','wsStage','canvasWrap','notePanel','noteRestore','legacyBanner',
- 'modeWrite','modeDraw','textTools','drawTools','centerNoteBtn','migrationBanner','versionBadge',
+ 'scheduleModal','closeModalBtn','toast','calTitle','calGrid','calWeekdays','calPrev','calNext','calToday','upcomingList','activityList','wsActivities','drawPanel','noteBody','drawBody','quickAddBtn','wsAddBtn','quickMenu','qmAct','qmSch','activityModal','actTitle','actDesc','actDue','actError','actDelete','actCancel','actSave','actModalTitle','closeActBtn','authUsername','usernameField','grayModeBtn','styleOptions',
+ 'workspace','wsBack','wsWeekday','wsDate','wsPrevDay','wsNextDay','wsSchedule','wsStage','canvasWrap','notePanel','legacyBanner',
+ 'modeWrite','modeDraw','textTools','drawTools','migrationBanner','versionBadge',
  'scopeBox','kindBox','schSubject','schMeta','schStart','schEnd','weekdaysBox','weekdayChips','rangeBox','schStartDate','schEndDate','singleBox',
  'schSingleDate','schError','deleteScheduleBtn','cancelScheduleBtn','saveScheduleBtn','modalTitle','modalDateLabel'
 ].forEach(id => { els[id] = $(id); });
@@ -52,7 +52,7 @@ els.versionBadge.textContent = `v${APP_VERSION}`;
 
 const DEFAULT_PREFERENCES = { language: 'es', theme: 'dark', palette: 'blue', appStyle: 'soft' };
 const APP_STYLES = ['square', 'soft', 'glass', 'bold'];
-const UPCOMING_DAYS = 7;   // ventana de «Próximas actividades» (reservada: ver CAMBIOS_0.5.0.md)
+const UPCOMING_DAYS = 7;   // ventana de «Próximas actividades» (reservada: ver CAMBIOS_0.5.1.md)
 const PALETTES = [
   { id:'blue', name:{es:'Azul suave',en:'Soft blue'}, colors:['#7aa7f8','#8f82e8'] },
   { id:'lavender', name:{es:'Lavanda',en:'Lavender'}, colors:['#9b8ce8','#c29bea'] },
@@ -94,7 +94,7 @@ const I18N = {
 };
 
 
-// ---- Traducciones nuevas de 0.5.0 (se fusionan con las de 3.0) ----
+// ---- Traducciones nuevas de 0.5.1 (se fusionan con las de 3.0) ----
 const I18N_V4 = {
   es: {
     'cal.label':'CALENDARIO','cal.today':'Hoy','cal.prev':'Mes anterior','cal.next':'Mes siguiente','cal.legendNote':'Nota','cal.legendDraw':'Dibujo','cal.legendSched':'Horario',
@@ -106,7 +106,7 @@ const I18N_V4 = {
     'sch.tagSingle':'Fecha única','sch.tagChanged':'Modificada solo hoy','sch.tagRepeats':'Semanal',
     'legacy.note':'Hay una nota de Noti 3.0 guardada para los {day}.','legacy.drawing':'Hay un dibujo de Noti 3.0 guardado para los {day}.','legacy.importNote':'Importar nota aquí','legacy.importDrawing':'Importar dibujo aquí','legacy.imported':'Importado a esta fecha',
     'sync.pending':'Pendiente de sincronizar','sync.offlineQueued':'Sin conexión: tus cambios están guardados y se enviarán al reconectar.','sync.storageFull':'El almacenamiento del navegador está lleno; este dibujo solo se conserva en la nube.',
-    'sync.migrationNeeded':'Falta ejecutar SUPABASE_MIGRACION_0.5.0.sql en Supabase. Mientras tanto Noti guarda todo en este dispositivo y lo subirá cuando la migración esté aplicada.',
+    'sync.migrationNeeded':'Falta ejecutar SUPABASE_MIGRACION_0.5.1.sql en Supabase. Mientras tanto Noti guarda todo en este dispositivo y lo subirá cuando la migración esté aplicada.',
     'drawing.loading':'Cargando…','notes.selectSize':'Selecciona el texto al que quieres aplicar el tamaño.','notes.selectHighlight':'Selecciona el texto que quieres resaltar.','day.fullDate':'{weekday}, {date}'
   },
   en: {
@@ -119,7 +119,7 @@ const I18N_V4 = {
     'sch.tagSingle':'Single date','sch.tagChanged':'Changed for this date','sch.tagRepeats':'Weekly',
     'legacy.note':'There is a Noti 3.0 note saved for {day}.','legacy.drawing':'There is a Noti 3.0 drawing saved for {day}.','legacy.importNote':'Import note here','legacy.importDrawing':'Import drawing here','legacy.imported':'Imported into this date',
     'sync.pending':'Pending sync','sync.offlineQueued':'Offline: your changes are saved and will be sent when you reconnect.','sync.storageFull':'Browser storage is full; this drawing is only kept in the cloud.',
-    'sync.migrationNeeded':'SUPABASE_MIGRACION_0.5.0.sql has not been run in Supabase yet. Meanwhile Noti keeps everything on this device and will upload it once the migration is applied.',
+    'sync.migrationNeeded':'SUPABASE_MIGRACION_0.5.1.sql has not been run in Supabase yet. Meanwhile Noti keeps everything on this device and will upload it once the migration is applied.',
     'drawing.loading':'Loading…','notes.selectSize':'Select the text you want to resize.','notes.selectHighlight':'Select the text you want to highlight.','day.fullDate':'{weekday}, {date}'
   }
 };
@@ -127,7 +127,11 @@ const I18N_V5 = {
   es: { 'auth.email':'Correo o usuario','auth.emailPlaceholder':'Usuario o tucorreo@email.com','auth.username':'Nombre de usuario','auth.usernamePlaceholder':'usuario','auth.empty':'Escribe tu usuario o correo y tu contraseña.','auth.userNotFound':'Usuario no encontrado.','auth.wrongPassword':'Contraseña incorrecta.','auth.network':'No se pudo comprobar el usuario. Revisa tu conexión e inténtalo de nuevo.','auth.usernameInvalid':'El usuario debe tener 3–20 caracteres (letras, números, _ . -), sin espacios ni @.','auth.usernameTaken':'Ese nombre de usuario ya está en uso.','auth.emailNeeded':'Para crear una cuenta escribe un correo válido.','auth.rateLimit':'Se alcanzó el límite de envío de correos. Espera unos minutos e inténtalo otra vez.','welcome':'Hola, {name}','settings.gray':'Gris tenue','settings.style':'Temas de App','style.square':'Cuadrado','style.soft':'Bordes suaves','style.glass':'Glass','style.bold':'Bold minimalista','schedule.next':'Próxima','legacy.skip':'No importar' },
   en: { 'auth.email':'Email or username','auth.emailPlaceholder':'Username or you@email.com','auth.username':'Username','auth.usernamePlaceholder':'username','auth.empty':'Enter your username or email and your password.','auth.userNotFound':'User not found.','auth.wrongPassword':'Incorrect password.','auth.network':'Could not check the username. Check your connection and try again.','auth.usernameInvalid':'Username must be 3–20 characters (letters, digits, _ . -), no spaces or @.','auth.usernameTaken':'That username is already taken.','auth.emailNeeded':'Enter a valid email to create an account.','auth.rateLimit':'Email sending limit reached. Wait a few minutes and try again.','welcome':'Hi, {name}','settings.gray':'Soft gray','settings.style':'App themes','style.square':'Square','style.soft':'Soft edges','style.glass':'Glass','style.bold':'Bold minimal','schedule.next':'Next','legacy.skip':'Do not import' }
 };
-['es','en'].forEach(l => Object.assign(I18N[l], I18N_V4[l], I18N_V5[l]));
+const I18N_V51 = {
+  es: { 'upc.label':'PENDIENTES','upc.title':'Próximas actividades','upc.empty':'No tienes actividades próximas','act.label':'TAREAS','act.title':'Actividades y tareas','act.empty':'Sin actividades para este día.','act.add':'Agregar','act.new':'Nueva actividad','act.edit':'Editar actividad','act.name':'Título','act.desc':'Descripción (opcional)','act.due':'Fecha límite (opcional)','act.errTitle':'Escribe el título de la actividad.','act.errDate':'Selecciona una fecha válida.','act.complete':'Marcar como hecha','act.overdue':'Vencida','act.noDate':'Sin fecha','act.saved':'Actividad guardada','act.deleted':'Actividad eliminada','act.deleteConfirm':'¿Eliminar esta actividad?','quick.activity':'Agregar actividad o tarea','quick.schedule':'Agregar o modificar horario','sync.syncing':'Sincronizando…','sync.errorRetry':'Error al sincronizar · Reintentar','schedule.title':'Horario universitario','schedule.empty':'No hay clases ni bloques para este día. Usa el botón <strong>+</strong> para agregar o modificar el horario.','sch.newTitle':'Nuevo bloque de horario','sch.editTitle':'Editar bloque de horario','schedule.subject':'Asignatura o bloque','day.sheet':'HOJA DEL DÍA' },
+  en: { 'upc.label':'PENDING','upc.title':'Upcoming activities','upc.empty':'You have no upcoming activities','act.label':'TASKS','act.title':'Activities and tasks','act.empty':'No activities for this day.','act.add':'Add','act.new':'New activity','act.edit':'Edit activity','act.name':'Title','act.desc':'Description (optional)','act.due':'Due date (optional)','act.errTitle':'Enter the activity title.','act.errDate':'Select a valid date.','act.complete':'Mark as done','act.overdue':'Overdue','act.noDate':'No date','act.saved':'Activity saved','act.deleted':'Activity deleted','act.deleteConfirm':'Delete this activity?','quick.activity':'Add activity or task','quick.schedule':'Add or edit schedule','sync.syncing':'Syncing…','sync.errorRetry':'Sync error · Retry','schedule.title':'University schedule','schedule.empty':'No classes or blocks for this day. Use the <strong>+</strong> button to add or edit the schedule.','sch.newTitle':'New schedule block','sch.editTitle':'Edit schedule block','schedule.subject':'Subject or block' }
+};
+['es','en'].forEach(l => Object.assign(I18N[l], I18N_V4[l], I18N_V5[l], I18N_V51[l]));
 
 let preferences = { ...DEFAULT_PREFERENCES };
 let preferencesLoadedFromCloud = false;
@@ -185,7 +189,6 @@ function applyPreferences() {
   document.querySelector('.size-control')?.setAttribute('title', t('drawing.size'));
   if (!drawing.colorTouched) els.brushColor.value = preferences.theme === 'light' ? '#172033' : '#e8edf2';
   setEraser(drawing.erasing);
-  renderCenterBtn();
   renderSettingsControls();
   if (user) renderAll();
   setAuthMode(authMode, true);
@@ -266,7 +269,7 @@ function loadLocalState() {
   const saved = readJSON(userKey());
   if (saved) {
     s.notes = saved.notes || {}; s.drawingIndex = saved.drawingIndex || {};
-    s.items = saved.items || []; s.exceptions = saved.exceptions || []; s.queue = saved.queue || []; s.legacyImport = saved.legacyImport || {};
+    s.items = saved.items || []; s.exceptions = saved.exceptions || []; s.queue = saved.queue || []; s.legacyImport = saved.legacyImport || {}; s.activities = saved.activities || [];
   }
   // Datos de Noti 3.0 (por día de la semana) para el aviso de importación
   const l2 = readJSON(legacyKey()) || readJSON('noti-v1');
@@ -282,8 +285,8 @@ function loadLocalState() {
 function saveLocal() {
   if (!user) return;
   const prev = readJSON(userKey()) || {};
-  const { notes, drawingIndex, items, exceptions, queue, legacyImport } = state;
-  try { localStorage.setItem(userKey(), JSON.stringify({ ...prev, notes, drawingIndex, items, exceptions, queue, legacyImport, preferences })); }
+  const { notes, drawingIndex, items, exceptions, queue, legacyImport, activities } = state;
+  try { localStorage.setItem(userKey(), JSON.stringify({ ...prev, notes, drawingIndex, items, exceptions, queue, legacyImport, activities, preferences })); }
   catch (e) { console.warn('No se pudo guardar localmente:', e.message); }
 }
 function getLocalDrawing(date) {
@@ -393,6 +396,15 @@ const exToRow = e => ({ item_id:e.item_id, occurrence_date:e.occurrence_date, us
   subject:e.subject ?? null, room:e.room ?? null, teacher:e.teacher ?? null,
   start_time:e.start_time ? `${e.start_time}:00` : null, end_time:e.end_time ? `${e.end_time}:00` : null, updated_at:new Date().toISOString() });
 
+const rowToAct = r => ({ id:r.id, title:r.title || '', description:r.description || '', due_date:r.due_date || null, done:!!r.done });
+const actToRow = a => ({ id:a.id, user_id:user.id, title:a.title, description:a.description || '', due_date:a.due_date || null, done:!!a.done, done_at:a.done ? new Date().toISOString() : null, updated_at:new Date().toISOString() });
+function overlayActs(rows) {   // lo pendiente en la cola local manda sobre lo que llegó de la nube
+  for (const op of state.queue) {
+    if (op.type === 'act') { const a = state.activities.find(x => x.id === op.id); if (a) { const k = rows.findIndex(x => x.id === op.id); k >= 0 ? rows[k] = a : rows.push(a); } }
+    if (op.type === 'act-delete') rows = rows.filter(x => x.id !== op.id);
+  }
+  return rows;
+}
 const isMissingTable = e => !!e && (/PGRST205|42P01/.test(e.code || '') || /schema cache|does not exist|could not find the table/i.test(e.message || ''));
 const isQueued = key => state.queue.some(q => q.key === key);
 
@@ -461,13 +473,14 @@ async function loadLegacyFromCloud() {
 async function loadCloudState() {
   const uid = user.id;
   const from = tb => supabaseClient.from(tb);
-  const [n, d, si, se] = await Promise.all([
+  const [n, d, si, se, ac] = await Promise.all([
     from('notes_by_date').select('note_date, content, font_family').eq('user_id', uid),
     from('drawings_by_date').select('drawing_date, updated_at').eq('user_id', uid),
     from('schedule_items').select('*').eq('user_id', uid),
-    from('schedule_exceptions').select('*').eq('user_id', uid)
+    from('schedule_exceptions').select('*').eq('user_id', uid),
+    from('activities').select('*').eq('user_id', uid)
   ]);
-  const failed = [n, d, si, se].find(r => r.error);
+  const failed = [n, d, si, se, ac].find(r => r.error);
   if (failed) {
     if (isMissingTable(failed.error)) { state.cloudReady = false; renderMigrationBanner(); await loadLegacyFromCloud().catch(() => {}); scheduleRetry(); return; }
     throw failed.error;
@@ -489,6 +502,7 @@ async function loadCloudState() {
 
   const merged = overlayQueue((si.data || []).map(rowToItem), (se.data || []).map(rowToEx));
   state.notes = notes; state.drawingIndex = idx; state.items = merged.items; state.exceptions = merged.exceptions;
+  state.activities = overlayActs((ac.data || []).map(rowToAct));
 
   const legacySchedules = await loadLegacyFromCloud().catch(() => []);
   migrateLegacySchedules(legacySchedules);
@@ -526,6 +540,11 @@ async function runOp(op) {
   if (op.type === 'legacy') {   // va DESPUÉS de la op de nota/dibujo en la cola: solo se envía si el contenido ya se guardó en el destino
     const e = state.legacyImport[op.id]; if (!e) return;
     res = await db.rpc('noti_merge_settings', { p_patch: {}, p_legacy: { [op.id]: e } });
+  } else if (op.type === 'act') {
+    const a = state.activities.find(x => x.id === op.id); if (!a) return;
+    res = await db.from('activities').upsert(actToRow(a), { onConflict:'id' });
+  } else if (op.type === 'act-delete') {
+    res = await db.from('activities').delete().eq('id', op.id).eq('user_id', user.id);
   } else if (op.type === 'note') {
     const n = state.notes[op.date]; if (!n) return;
     res = await db.from('notes_by_date').upsert({ user_id:user.id, note_date:op.date, content:n.content, font_family:n.font || 'system', updated_at:now }, { onConflict:'user_id,note_date' });
@@ -552,7 +571,7 @@ async function flushQueue() {
   if (flushing || !user) return;
   if (!state.queue.length) { refreshStatuses(); return; }
   if (!state.cloudReady) { refreshStatuses(); scheduleRetry(); return; }
-  flushing = true;
+  flushing = true; setSyncStatus(t('sync.syncing'), 'loading');
   try {
     while (state.queue.length) {
       const op = state.queue[0];
@@ -587,6 +606,7 @@ async function setupRealtime() {
     .on('postgres_changes', { event:'*', schema:'public', table:'drawings_by_date', filter:f }, onRemoteDrawing)
     .on('postgres_changes', { event:'*', schema:'public', table:'schedule_items', filter:f }, onRemoteSchedule)
     .on('postgres_changes', { event:'*', schema:'public', table:'schedule_exceptions', filter:f }, onRemoteSchedule)
+    .on('postgres_changes', { event:'*', schema:'public', table:'activities', filter:f }, onRemoteActs)
     .subscribe(status => {
       if (status === 'SUBSCRIBED' && !state.queue.length) setSyncStatus(t('sync.synced'), 'success');
       if (status === 'CHANNEL_ERROR' || status === 'TIMED_OUT') setSyncStatus(t('sync.limited'), 'warning');
@@ -619,6 +639,12 @@ async function onRemoteSchedule() {
   const m = overlayQueue(si.data.map(rowToItem), se.data.map(rowToEx));
   state.items = m.items; state.exceptions = m.exceptions; saveLocal(); renderAll();
 }
+async function onRemoteActs() {
+  if (!initialized) return;
+  const r = await supabaseClient.from('activities').select('*').eq('user_id', user.id);
+  if (r.error) return;
+  state.activities = overlayActs(r.data.map(rowToAct)); saveLocal(); renderAll();
+}
 async function refreshCloud() {
   if (!user || !initialized) return;
   await flushQueue();
@@ -629,7 +655,7 @@ async function refreshCloud() {
 const noteHasContent = html => !!html && (html.replace(/<[^>]*>/g, '').replace(/&nbsp;/g, ' ').trim().length > 0 || /<input/i.test(html));
 const occurrencesFor = iso => C.resolveForDate(state.items, state.exceptions, iso);
 
-function renderAll() { renderCalendar(); renderAgenda(); if (wsOpen) { renderWsHeader(); renderWsSchedule(); } }
+function renderAll() { renderCalendar(); renderAgenda(); renderUpcoming(); if (wsOpen) { renderWsHeader(); renderWsSchedule(); } }
 
 function renderCalendar() {
   const today = C.todayISO();
@@ -695,8 +721,8 @@ function onDayRollover() {
 function renderAgenda() {
   const iso = state.selectedDate, id = dayIdOf(iso);
   els.dayTitle.textContent = fmtFull(iso);
-  els.daySubtitle.textContent = ['sat', 'sun'].includes(id) ? t('day.weekendSubtitle') : t('day.weekSubtitle');
   renderScheduleList(els.scheduleList, els.scheduleCount, iso);
+  renderActList(els.activityList, iso);
 }
 
 function metaOf(o) { return [o.room, o.teacher].filter(Boolean).join(' · '); }
@@ -861,6 +887,55 @@ function deleteSchedule() {
 }
 function afterScheduleChange(msg) { closeModal(); renderAll(); showToastFn(msg); }
 
+// =====================  ACTIVIDADES, PRÓXIMAS Y CREACIÓN RÁPIDA  =====================
+const fmtShort = iso => new Intl.DateTimeFormat(locale(), { day:'numeric', month:'short' }).format(C.parseISO(iso));
+function actRows(list, today) {
+  return list.map(a => `<div class="act-row${a.done ? ' done' : ''}"><label class="act-check"><input type="checkbox" data-act-toggle="${a.id}" ${a.done ? 'checked' : ''} aria-label="${escapeAttr(t('act.complete'))}"></label>
+    <button type="button" class="act-main" data-act-edit="${a.id}"><span class="act-title">${escapeHtml(a.title)}</span>${a.description ? `<span class="act-desc">${escapeHtml(a.description)}</span>` : ''}
+    <span class="tags">${!a.done && a.due_date && a.due_date < today ? `<span class="tag overdue">${t('act.overdue')}</span>` : ''}<span class="tag">${a.due_date ? escapeHtml(fmtShort(a.due_date)) : t('act.noDate')}</span></span></button></div>`).join('');
+}
+function renderActList(el, iso) {
+  const today = C.todayISO(), list = C.activitiesOn(state.activities, iso, today);
+  el.innerHTML = list.length ? actRows(list, today) : `<div class="empty-state">${t('act.empty')} <button class="tool-btn act-empty-add" data-act-add="1" type="button">${t('act.add')}</button></div>`;
+  el.querySelectorAll('[data-act-toggle]').forEach(c => c.addEventListener('change', () => toggleActivity(c.dataset.actToggle, c.checked)));
+  el.querySelectorAll('[data-act-edit]').forEach(b => b.addEventListener('click', () => openActivityModal(state.activities.find(a => a.id === b.dataset.actEdit))));
+  el.querySelector('[data-act-add]')?.addEventListener('click', () => openActivityModal(null, iso));
+}
+function renderUpcoming() {   // solo pendientes de los próximos UPCOMING_DAYS días (hoy incluido); sin completadas ni vencidas
+  const list = C.upcoming(state.activities, C.todayISO(), UPCOMING_DAYS);
+  els.upcomingList.innerHTML = list.length ? list.map(a => `<button type="button" class="upcoming-row" data-day="${a.due_date}"><span class="upc-date">${escapeHtml(fmtShort(a.due_date))}</span><span class="upc-title">${escapeHtml(a.title)}</span></button>`).join('') : `<div class="empty-state">${t('upc.empty')}</div>`;
+  els.upcomingList.querySelectorAll('[data-day]').forEach(b => b.addEventListener('click', () => { if (!wsOpen) openWorkspace(b.dataset.day, null); }));
+}
+function queueActivity(a) { const k = state.activities.findIndex(x => x.id === a.id); k >= 0 ? state.activities[k] = a : state.activities.push(a); enqueue({ key:'act:' + a.id, type:'act', id:a.id }); }
+function toggleActivity(id, done) { const a = state.activities.find(x => x.id === id); if (!a) return; queueActivity({ ...a, done }); renderAll(); }
+let actEditing = null;
+function openActivityModal(a = null, date) {
+  closeQuickMenu();
+  actEditing = { a, date: date || (wsOpen && currentDate ? currentDate : state.selectedDate) };
+  els.actModalTitle.textContent = a ? t('act.edit') : t('act.new');
+  els.actTitle.value = a ? a.title : ''; els.actDesc.value = a ? a.description : ''; els.actDue.value = a ? (a.due_date || '') : actEditing.date;
+  els.actError.textContent = ''; els.actDelete.classList.toggle('hidden', !a);
+  els.activityModal.classList.remove('hidden'); els.actTitle.focus({ preventScroll:true });
+}
+function closeActivityModal() { els.activityModal.classList.add('hidden'); actEditing = null; }
+function saveActivity() {
+  const title = els.actTitle.value.trim(), due = els.actDue.value || null;
+  if (!title) { els.actError.textContent = t('act.errTitle'); return; }
+  if (due && !C.isISO(due)) { els.actError.textContent = t('act.errDate'); return; }
+  const prev = actEditing.a;
+  queueActivity({ id: prev ? prev.id : uuid(), title, description: els.actDesc.value.trim(), due_date: due, done: prev ? prev.done : false });
+  closeActivityModal(); renderAll(); showToastFn(t('act.saved'));
+}
+function deleteActivity() {
+  const a = actEditing?.a; if (!a || !confirm(t('act.deleteConfirm'))) return;
+  state.activities = state.activities.filter(x => x.id !== a.id);
+  state.queue = state.queue.filter(q => q.key !== 'act:' + a.id);
+  enqueue({ key:'act-del:' + a.id, type:'act-delete', id:a.id });
+  closeActivityModal(); renderAll(); showToastFn(t('act.deleted'));
+}
+function closeQuickMenu() { els.quickMenu.classList.add('hidden'); els.quickAddBtn.setAttribute('aria-expanded', 'false'); }
+function toggleQuickMenu() { const open = els.quickMenu.classList.contains('hidden'); els.quickMenu.classList.toggle('hidden', !open); els.quickAddBtn.setAttribute('aria-expanded', String(open)); if (open) els.qmAct.focus({ preventScroll:true }); }
+
 // =====================  ESPACIO DE TRABAJO DIARIO  =====================
 function setOrigin(el) {
   const r = el && el.getBoundingClientRect ? el.getBoundingClientRect() : null;
@@ -920,10 +995,10 @@ function renderWsHeader() {
 function renderWsSchedule() {
   if (!currentDate) return;
   const rows = occurrencesFor(currentDate);
-  els.wsSchedule.innerHTML = rows.map((o, i) => `<button class="ws-chip" type="button" data-i="${i}"><b>${escapeHtml(o.start_time || '··:··')}</b><span>${escapeHtml(o.subject || t('schedule.noName'))}</span></button>`).join('')
-    + `<button class="ws-chip add" type="button" data-add="1">${t('ws.addChip')}</button>`;
+  els.wsSchedule.classList.toggle('hidden', !rows.length);
+  els.wsSchedule.innerHTML = rows.map((o, i) => `<button class="ws-chip" type="button" data-i="${i}"><b>${escapeHtml(o.start_time || '··:··')}</b><span>${escapeHtml(o.subject || t('schedule.noName'))}</span></button>`).join('');
   els.wsSchedule.querySelectorAll('[data-i]').forEach(b => b.addEventListener('click', () => openScheduleModal(rows[Number(b.dataset.i)])));
-  els.wsSchedule.querySelector('[data-add]').addEventListener('click', () => openScheduleModal());
+  renderActList(els.wsActivities, currentDate);
 }
 
 function syncViewport() {
@@ -931,36 +1006,28 @@ function syncViewport() {
   if (vv && wsOpen) { els.workspace.style.height = vv.height + 'px'; els.workspace.style.top = vv.offsetTop + 'px'; }
   layoutCanvas();
 }
-function setMode(mode) {
+function setMode(mode) {   // notas y dibujo: acordeón de un solo panel abierto; ni el texto ni el lienzo se recrean
+  if (els.workspace.dataset.mode === 'draw' && mode !== 'draw' && drawing.dirty) saveDrawingNow();
   els.workspace.dataset.mode = mode;
-  els.modeWrite.classList.toggle('active', mode === 'write'); els.modeWrite.setAttribute('aria-pressed', String(mode === 'write'));
-  els.modeDraw.classList.toggle('active', mode === 'draw'); els.modeDraw.setAttribute('aria-pressed', String(mode === 'draw'));
-  els.textTools.classList.toggle('hidden', mode !== 'write');
-  els.drawTools.classList.toggle('hidden', mode !== 'draw');
-  els.noteRestore.classList.toggle('hidden', mode !== 'draw');
-  if (mode === 'draw') { commitNoteNow(); if (document.activeElement === els.noteEditor) els.noteEditor.blur(); }
-  requestAnimationFrame(layoutCanvas);
+  const w = mode === 'write';
+  [[els.notePanel, els.modeWrite, els.noteBody, w], [els.drawPanel, els.modeDraw, els.drawBody, !w]].forEach(([p, b, body, open]) => { p.classList.toggle('open', open); b.setAttribute('aria-expanded', String(open)); body.inert = !open; });
+  if (!w) { commitNoteNow(); if (document.activeElement === els.noteEditor) els.noteEditor.blur(); }
+  [0, 200, 420].forEach(ms => setTimeout(layoutCanvas, ms));
 }
-function renderCenterBtn() {
-  const on = els.workspace.classList.contains('centered');
-  els.centerNoteBtn.setAttribute('aria-pressed', String(on));
-  els.centerNoteBtn.classList.toggle('active', on);
-  els.centerNoteBtn.title = on ? t('ws.uncenter') : t('ws.center');
-  els.centerNoteBtn.setAttribute('aria-label', els.centerNoteBtn.title);
-}
-function toggleCenter() { els.workspace.classList.toggle('centered'); renderCenterBtn(); }
 
 // ---- Estado de guardado ----
 let noteTimer = null;
-function setStat(el, kind) {
-  el.textContent = kind === 'saving' ? t('sync.saving') : kind === 'pending' ? t('sync.pending') : t('sync.synced');
-  el.classList.toggle('ok', kind === 'saved'); el.classList.toggle('busy', kind === 'saving');
+function setStat(el, kind) {   // saving → syncing → saved; offline → pending; fallo → error (clic = reintentar). Nunca «Sincronizado» sin confirmación.
+  const key = { saving:'sync.saving', syncing:'sync.syncing', pending:'sync.pending', error:'sync.errorRetry', saved:'sync.synced' }[kind] || 'sync.synced';
+  el.textContent = t(key); el.dataset.state = kind;
+  el.classList.toggle('ok', kind === 'saved'); el.classList.toggle('busy', kind === 'saving' || kind === 'syncing'); el.classList.toggle('err', kind === 'error');
 }
 function refreshStatuses() {
   if (!currentDate) return;
-  const net = navigator.onLine && state.cloudReady && !syncFailed;
-  setStat(els.saveStatus, noteTimer ? 'saving' : isQueued('note:' + currentDate) ? (net ? 'saving' : 'pending') : 'saved');
-  setStat(els.drawingStatus, drawing.dirty ? 'saving' : isQueued('drawing:' + currentDate) ? (net ? 'saving' : 'pending') : 'saved');
+  const net = navigator.onLine && state.cloudReady;
+  const st = (typing, queued) => typing ? 'saving' : queued ? (net ? (syncFailed ? 'error' : 'syncing') : 'pending') : 'saved';
+  setStat(els.saveStatus, st(!!noteTimer, isQueued('note:' + currentDate)));
+  setStat(els.drawingStatus, st(drawing.dirty, isQueued('drawing:' + currentDate)));
 }
 
 // ---- Notas ----
@@ -1092,7 +1159,7 @@ const loadImage = src => new Promise((res, rej) => { const i = new Image(); i.on
 
 // ---- Lienzo (superficie lógica fija 1600×1200; transparente: flota sobre el espacio de trabajo) ----
 function layoutCanvas() {
-  const w = els.wsStage.clientWidth, h = els.wsStage.clientHeight; if (!w || !h) return;   // clientWidth ignora el zoom de la transición
+  const w = els.canvasWrap.clientWidth, h = els.canvasWrap.clientHeight; if (!w || !h) return;   // clientWidth ignora el zoom de la transición
   const s = Math.min((w - 4) / CANVAS_W, (h - 4) / CANVAS_H);
   els.canvas.style.width = Math.max(80, Math.floor(CANVAS_W * s)) + 'px';
   els.canvas.style.height = Math.max(60, Math.floor(CANVAS_H * s)) + 'px';
@@ -1206,7 +1273,18 @@ els.grayModeBtn.addEventListener('click', () => changePreferences({ theme:'gray'
 els.calPrev.addEventListener('click', () => shiftMonth(-1));
 els.calNext.addEventListener('click', () => shiftMonth(1));
 els.calToday.addEventListener('click', goToday);
-els.editScheduleBtn.addEventListener('click', () => openScheduleModal());
+
+// Creación rápida y actividades
+els.quickAddBtn.addEventListener('click', toggleQuickMenu);
+els.wsAddBtn.addEventListener('click', toggleQuickMenu);
+els.qmAct.addEventListener('click', () => openActivityModal(null));
+els.qmSch.addEventListener('click', () => { closeQuickMenu(); openScheduleModal(); });
+document.addEventListener('click', ev => { if (!els.quickMenu.classList.contains('hidden') && !ev.target.closest('#quickMenu, .quick-add')) closeQuickMenu(); });
+els.actSave.addEventListener('click', saveActivity); els.actDelete.addEventListener('click', deleteActivity);
+els.actCancel.addEventListener('click', closeActivityModal); els.closeActBtn.addEventListener('click', closeActivityModal);
+els.activityModal.addEventListener('click', ev => { if (ev.target.dataset.closeAct) closeActivityModal(); });
+els.actTitle.addEventListener('keydown', ev => { if (ev.key === 'Enter') saveActivity(); });
+[els.saveStatus, els.drawingStatus, els.syncStatus].forEach(e => e.addEventListener('click', () => { if (syncFailed && !flushing) flushQueue(); }));   // «Error · Reintentar»
 
 // Espacio diario
 els.wsBack.addEventListener('click', requestCloseWorkspace);
@@ -1214,9 +1292,7 @@ els.wsPrevDay.addEventListener('click', () => changeDay(-1));
 els.wsNextDay.addEventListener('click', () => changeDay(1));
 els.modeWrite.addEventListener('click', () => setMode('write'));
 els.modeDraw.addEventListener('click', () => setMode('draw'));
-els.noteRestore.addEventListener('click', () => setMode('write'));
-els.centerNoteBtn.addEventListener('click', toggleCenter);
-$('wsDock').addEventListener('mousedown', ev => { if (ev.target.closest('button')) ev.preventDefault(); });   // los botones no quitan el foco/selección del editor
+els.textTools.addEventListener('mousedown', ev => { if (ev.target.closest('button')) ev.preventDefault(); });   // los botones no quitan el foco/selección del editor
 els.noteEditor.addEventListener('input', () => { scheduleNoteSave(); if (!els.legacyBanner.classList.contains('hidden')) renderLegacyBanner(); });
 els.noteEditor.addEventListener('change', ev => {       // el estado de un checkbox no se serializa en innerHTML: se refleja como atributo
   if (ev.target.type === 'checkbox') { ev.target.toggleAttribute('checked', ev.target.checked); scheduleNoteSave(); }
@@ -1250,7 +1326,9 @@ els.scheduleModal.addEventListener('click', ev => { if (ev.target.dataset.closeM
 
 document.addEventListener('keydown', ev => {
   if (ev.key !== 'Escape') return;
-  if (!els.scheduleModal.classList.contains('hidden')) closeModal();
+  if (!els.quickMenu.classList.contains('hidden')) closeQuickMenu();
+  else if (!els.activityModal.classList.contains('hidden')) closeActivityModal();
+  else if (!els.scheduleModal.classList.contains('hidden')) closeModal();
   else if (!els.settingsModal.classList.contains('hidden')) closeSettings();
   else if (wsOpen) requestCloseWorkspace();
 });
