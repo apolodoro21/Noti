@@ -1,4 +1,4 @@
-/* Noti 0.5.1 — calendario real, espacio diario y horarios recurrentes.
+/* Noti 0.5.2 — calendario real, espacio diario y horarios recurrentes.
    Basado en Noti 3.0 (mismo Supabase, auth, preferencias, i18n y editor). */
 const SUPABASE_URL = 'https://ueyakwaxvotartkcnyhj.supabase.co';
 const SUPABASE_PUBLISHABLE_KEY = 'sb_publishable_GHLYL_7tgXlpsgB5b7rl5Q_qQ_a-Eai'; // clave pública (anon): la seguridad la imponen las políticas RLS
@@ -6,7 +6,7 @@ const supabaseClient = window.supabase.createClient(SUPABASE_URL, SUPABASE_PUBLI
   auth: { persistSession: true, autoRefreshToken: true, detectSessionInUrl: true }
 });
 const C = window.NotiCore;
-const APP_VERSION = '0.5.1';
+const APP_VERSION = '0.5.2';
 const CANVAS_W = 1600, CANVAS_H = 1200;           // superficie lógica fija: el dibujo es idéntico en cualquier dispositivo
 const EXPORT_W = 1200, EXPORT_H = 900;
 
@@ -38,10 +38,10 @@ function newState() {
 const $ = id => document.getElementById(id);
 const els = {};
 ['authScreen','appScreen','authForm','authName','nameField','authEmail','authPassword','authSubmit','authMessage','loginTab','signupTab',
- 'welcomeLine','syncStatus','drawingStatus','logoutBtn','settingsBtn','settingsModal','closeSettingsBtn','closeSettingsFooterBtn','languageSelect',
- 'lightModeBtn','darkModeBtn','paletteOptions','settingsSaveStatus','dayTitle','scheduleList','scheduleCount','noteEditor','fontSelect',
- 'fontSizeSelect','highlightBtn','checklistBtn','saveStatus','brushColor','brushSize','brushSizeValue','eraserBtn','clearCanvasBtn','installBtn',
- 'scheduleModal','closeModalBtn','toast','calTitle','calGrid','calWeekdays','calPrev','calNext','calToday','upcomingList','activityList','wsActivities','drawPanel','noteBody','drawBody','quickAddBtn','wsAddBtn','quickMenu','qmAct','qmSch','activityModal','actTitle','actDesc','actDue','actError','actDelete','actCancel','actSave','actModalTitle','closeActBtn','authUsername','usernameField','grayModeBtn','styleOptions',
+ 'welcomeLine','syncStatus','daySync','sizeBtn','sizeDot','sizePop','schedLabel','logoutBtn','settingsBtn','settingsModal','closeSettingsBtn','closeSettingsFooterBtn','languageSelect',
+ 'lightModeBtn','darkModeBtn','paletteOptions','settingsSaveStatus','scheduleList','scheduleCount','noteEditor','fontSelect',
+ 'fontSizeSelect','highlightBtn','checklistBtn','brushColor','brushSize','brushSizeValue','eraserBtn','clearCanvasBtn','installBtn',
+ 'scheduleModal','closeModalBtn','toast','calTitle','calGrid','calWeekdays','calPrev','calNext','calToday','upcomingList','wsActivities','drawPanel','noteBody','drawBody','quickAddBtn','wsAddBtn','quickMenu','qmAct','qmSch','activityModal','actTitle','actDesc','actDue','actError','actDelete','actCancel','actSave','actModalTitle','closeActBtn','authUsername','usernameField','grayModeBtn','styleOptions',
  'workspace','wsBack','wsWeekday','wsDate','wsPrevDay','wsNextDay','wsSchedule','wsStage','canvasWrap','notePanel','legacyBanner',
  'modeWrite','modeDraw','textTools','drawTools','migrationBanner','versionBadge',
  'scopeBox','kindBox','schSubject','schMeta','schStart','schEnd','weekdaysBox','weekdayChips','rangeBox','schStartDate','schEndDate','singleBox',
@@ -52,7 +52,7 @@ els.versionBadge.textContent = `v${APP_VERSION}`;
 
 const DEFAULT_PREFERENCES = { language: 'es', theme: 'dark', palette: 'blue', appStyle: 'soft' };
 const APP_STYLES = ['square', 'soft', 'glass', 'bold'];
-const UPCOMING_DAYS = 7;   // ventana de «Próximas actividades» (reservada: ver CAMBIOS_0.5.1.md)
+const UPCOMING_DAYS = 7;   // ventana de «Próximas actividades» (reservada: ver CAMBIOS_0.5.2.md)
 const PALETTES = [
   { id:'blue', name:{es:'Azul suave',en:'Soft blue'}, colors:['#7aa7f8','#8f82e8'] },
   { id:'lavender', name:{es:'Lavanda',en:'Lavender'}, colors:['#9b8ce8','#c29bea'] },
@@ -94,7 +94,7 @@ const I18N = {
 };
 
 
-// ---- Traducciones nuevas de 0.5.1 (se fusionan con las de 3.0) ----
+// ---- Traducciones nuevas de 0.5.2 (se fusionan con las de 3.0) ----
 const I18N_V4 = {
   es: {
     'cal.label':'CALENDARIO','cal.today':'Hoy','cal.prev':'Mes anterior','cal.next':'Mes siguiente','cal.legendNote':'Nota','cal.legendDraw':'Dibujo','cal.legendSched':'Horario',
@@ -106,7 +106,7 @@ const I18N_V4 = {
     'sch.tagSingle':'Fecha única','sch.tagChanged':'Modificada solo hoy','sch.tagRepeats':'Semanal',
     'legacy.note':'Hay una nota de Noti 3.0 guardada para los {day}.','legacy.drawing':'Hay un dibujo de Noti 3.0 guardado para los {day}.','legacy.importNote':'Importar nota aquí','legacy.importDrawing':'Importar dibujo aquí','legacy.imported':'Importado a esta fecha',
     'sync.pending':'Pendiente de sincronizar','sync.offlineQueued':'Sin conexión: tus cambios están guardados y se enviarán al reconectar.','sync.storageFull':'El almacenamiento del navegador está lleno; este dibujo solo se conserva en la nube.',
-    'sync.migrationNeeded':'Falta ejecutar SUPABASE_MIGRACION_0.5.1.sql en Supabase. Mientras tanto Noti guarda todo en este dispositivo y lo subirá cuando la migración esté aplicada.',
+    'sync.migrationNeeded':'Falta ejecutar SUPABASE_MIGRACION_0.5.2.sql en Supabase. Mientras tanto Noti guarda todo en este dispositivo y lo subirá cuando la migración esté aplicada.',
     'drawing.loading':'Cargando…','notes.selectSize':'Selecciona el texto al que quieres aplicar el tamaño.','notes.selectHighlight':'Selecciona el texto que quieres resaltar.','day.fullDate':'{weekday}, {date}'
   },
   en: {
@@ -119,7 +119,7 @@ const I18N_V4 = {
     'sch.tagSingle':'Single date','sch.tagChanged':'Changed for this date','sch.tagRepeats':'Weekly',
     'legacy.note':'There is a Noti 3.0 note saved for {day}.','legacy.drawing':'There is a Noti 3.0 drawing saved for {day}.','legacy.importNote':'Import note here','legacy.importDrawing':'Import drawing here','legacy.imported':'Imported into this date',
     'sync.pending':'Pending sync','sync.offlineQueued':'Offline: your changes are saved and will be sent when you reconnect.','sync.storageFull':'Browser storage is full; this drawing is only kept in the cloud.',
-    'sync.migrationNeeded':'SUPABASE_MIGRACION_0.5.1.sql has not been run in Supabase yet. Meanwhile Noti keeps everything on this device and will upload it once the migration is applied.',
+    'sync.migrationNeeded':'SUPABASE_MIGRACION_0.5.2.sql has not been run in Supabase yet. Meanwhile Noti keeps everything on this device and will upload it once the migration is applied.',
     'drawing.loading':'Loading…','notes.selectSize':'Select the text you want to resize.','notes.selectHighlight':'Select the text you want to highlight.','day.fullDate':'{weekday}, {date}'
   }
 };
@@ -127,11 +127,15 @@ const I18N_V5 = {
   es: { 'auth.email':'Correo o usuario','auth.emailPlaceholder':'Usuario o tucorreo@email.com','auth.username':'Nombre de usuario','auth.usernamePlaceholder':'usuario','auth.empty':'Escribe tu usuario o correo y tu contraseña.','auth.userNotFound':'Usuario no encontrado.','auth.wrongPassword':'Contraseña incorrecta.','auth.network':'No se pudo comprobar el usuario. Revisa tu conexión e inténtalo de nuevo.','auth.usernameInvalid':'El usuario debe tener 3–20 caracteres (letras, números, _ . -), sin espacios ni @.','auth.usernameTaken':'Ese nombre de usuario ya está en uso.','auth.emailNeeded':'Para crear una cuenta escribe un correo válido.','auth.rateLimit':'Se alcanzó el límite de envío de correos. Espera unos minutos e inténtalo otra vez.','welcome':'Hola, {name}','settings.gray':'Gris tenue','settings.style':'Temas de App','style.square':'Cuadrado','style.soft':'Bordes suaves','style.glass':'Glass','style.bold':'Bold minimalista','schedule.next':'Próxima','legacy.skip':'No importar' },
   en: { 'auth.email':'Email or username','auth.emailPlaceholder':'Username or you@email.com','auth.username':'Username','auth.usernamePlaceholder':'username','auth.empty':'Enter your username or email and your password.','auth.userNotFound':'User not found.','auth.wrongPassword':'Incorrect password.','auth.network':'Could not check the username. Check your connection and try again.','auth.usernameInvalid':'Username must be 3–20 characters (letters, digits, _ . -), no spaces or @.','auth.usernameTaken':'That username is already taken.','auth.emailNeeded':'Enter a valid email to create an account.','auth.rateLimit':'Email sending limit reached. Wait a few minutes and try again.','welcome':'Hi, {name}','settings.gray':'Soft gray','settings.style':'App themes','style.square':'Square','style.soft':'Soft edges','style.glass':'Glass','style.bold':'Bold minimal','schedule.next':'Next','legacy.skip':'Do not import' }
 };
+const I18N_V52 = {
+  es: { 'panel.notes':'Notas','panel.draw':'Lienzo','upc.label':'PRÓXIMAS ACTIVIDADES','upc.title':'Pendientes','sync.saved':'Sincronizado' },
+  en: { 'panel.notes':'Notes','panel.draw':'Canvas','upc.label':'UPCOMING ACTIVITIES','upc.title':'Pending','sync.saved':'Synced' }
+};
 const I18N_V51 = {
   es: { 'upc.label':'PENDIENTES','upc.title':'Próximas actividades','upc.empty':'No tienes actividades próximas','act.label':'TAREAS','act.title':'Actividades y tareas','act.empty':'Sin actividades para este día.','act.add':'Agregar','act.new':'Nueva actividad','act.edit':'Editar actividad','act.name':'Título','act.desc':'Descripción (opcional)','act.due':'Fecha límite (opcional)','act.errTitle':'Escribe el título de la actividad.','act.errDate':'Selecciona una fecha válida.','act.complete':'Marcar como hecha','act.overdue':'Vencida','act.noDate':'Sin fecha','act.saved':'Actividad guardada','act.deleted':'Actividad eliminada','act.deleteConfirm':'¿Eliminar esta actividad?','quick.activity':'Agregar actividad o tarea','quick.schedule':'Agregar o modificar horario','sync.syncing':'Sincronizando…','sync.errorRetry':'Error al sincronizar · Reintentar','schedule.title':'Horario universitario','schedule.empty':'No hay clases ni bloques para este día. Usa el botón <strong>+</strong> para agregar o modificar el horario.','sch.newTitle':'Nuevo bloque de horario','sch.editTitle':'Editar bloque de horario','schedule.subject':'Asignatura o bloque','day.sheet':'HOJA DEL DÍA' },
   en: { 'upc.label':'PENDING','upc.title':'Upcoming activities','upc.empty':'You have no upcoming activities','act.label':'TASKS','act.title':'Activities and tasks','act.empty':'No activities for this day.','act.add':'Add','act.new':'New activity','act.edit':'Edit activity','act.name':'Title','act.desc':'Description (optional)','act.due':'Due date (optional)','act.errTitle':'Enter the activity title.','act.errDate':'Select a valid date.','act.complete':'Mark as done','act.overdue':'Overdue','act.noDate':'No date','act.saved':'Activity saved','act.deleted':'Activity deleted','act.deleteConfirm':'Delete this activity?','quick.activity':'Add activity or task','quick.schedule':'Add or edit schedule','sync.syncing':'Syncing…','sync.errorRetry':'Sync error · Retry','schedule.title':'University schedule','schedule.empty':'No classes or blocks for this day. Use the <strong>+</strong> button to add or edit the schedule.','sch.newTitle':'New schedule block','sch.editTitle':'Edit schedule block','schedule.subject':'Subject or block' }
 };
-['es','en'].forEach(l => Object.assign(I18N[l], I18N_V4[l], I18N_V5[l], I18N_V51[l]));
+['es','en'].forEach(l => Object.assign(I18N[l], I18N_V4[l], I18N_V5[l], I18N_V51[l], I18N_V52[l]));
 
 let preferences = { ...DEFAULT_PREFERENCES };
 let preferencesLoadedFromCloud = false;
@@ -720,9 +724,8 @@ function onDayRollover() {
 
 function renderAgenda() {
   const iso = state.selectedDate, id = dayIdOf(iso);
-  els.dayTitle.textContent = fmtFull(iso);
   renderScheduleList(els.scheduleList, els.scheduleCount, iso);
-  renderActList(els.activityList, iso);
+  els.schedLabel.textContent = `${t('schedule.label')} · ${fmtFull(iso)}`;
 }
 
 function metaOf(o) { return [o.room, o.teacher].filter(Boolean).join(' · '); }
@@ -952,7 +955,7 @@ function openWorkspace(iso, originEl) {
   els.workspace.inert = false; els.workspace.setAttribute('aria-hidden', 'false');
   document.body.classList.add('ws-open');
   try { history.pushState({ noti:'ws' }, ''); wsPushed = true; } catch { wsPushed = false; }
-  setMode('write');
+  setPanel('draw', false); setPanel('notes', true); applyPanels();   // por defecto: Notas expandidas, Lienzo contraído
   loadDay(iso);
   syncViewport();
   setTimeout(() => els.wsBack.focus({ preventScroll:true }), 60);
@@ -1006,28 +1009,44 @@ function syncViewport() {
   if (vv && wsOpen) { els.workspace.style.height = vv.height + 'px'; els.workspace.style.top = vv.offsetTop + 'px'; }
   layoutCanvas();
 }
-function setMode(mode) {   // notas y dibujo: acordeón de un solo panel abierto; ni el texto ni el lienzo se recrean
-  if (els.workspace.dataset.mode === 'draw' && mode !== 'draw' && drawing.dirty) saveDrawingNow();
-  els.workspace.dataset.mode = mode;
-  const w = mode === 'write';
-  [[els.notePanel, els.modeWrite, els.noteBody, w], [els.drawPanel, els.modeDraw, els.drawBody, !w]].forEach(([p, b, body, open]) => { p.classList.toggle('open', open); b.setAttribute('aria-expanded', String(open)); body.inert = !open; });
-  if (!w) { commitNoteNow(); if (document.activeElement === els.noteEditor) els.noteEditor.blur(); }
-  [0, 200, 420].forEach(ms => setTimeout(layoutCanvas, ms));
+// Paneles independientes: ambos pueden estar abiertos o contraídos. Ni el editor ni el <canvas> se recrean (el dibujo vive en el bitmap fijo 1600×1200).
+const panelOpen = { notes: true, draw: false };
+function setPanel(name, open) {
+  if (panelOpen[name] === open) return;
+  panelOpen[name] = open;
+  if (name === 'notes' && !open) { commitNoteNow(); if (document.activeElement === els.noteEditor) els.noteEditor.blur(); }
+  if (name === 'draw' && !open) { drawing.active = false; closeSizePop(); if (drawing.dirty) saveDrawingNow(); }
+  applyPanels();
+  if (panelOpen.draw && ((name === 'draw' && open) || (name === 'notes' && !open))) setTimeout(scrollToDraw, 370);   // tras la transición, el lienzo queda a la vista bajo la cabecera fija
+}
+function scrollToDraw() {
+  const w = els.workspace, top = document.querySelector('.ws-top').offsetHeight;
+  const y = w.scrollTop + els.drawPanel.getBoundingClientRect().top - w.getBoundingClientRect().top - top - 6;
+  w.scrollTo({ top: Math.max(0, y), behavior: 'auto' });   // instantáneo: el lienzo no debe moverse bajo el lápiz
+}
+function applyPanels() {
+  els.workspace.dataset.mode = panelOpen.draw ? 'draw' : 'write';   // «draw» habilita el lápiz; independiente de las notas
+  [[els.notePanel, els.modeWrite, els.noteBody, panelOpen.notes], [els.drawPanel, els.modeDraw, els.drawBody, panelOpen.draw]].forEach(([p, b, body, open]) => { p.classList.toggle('open', open); b.setAttribute('aria-expanded', String(open)); body.inert = !open; });
+  els.drawTools.inert = !panelOpen.draw;
+  [0, 220, 440].forEach(ms => setTimeout(layoutCanvas, ms));
 }
 
 // ---- Estado de guardado ----
 let noteTimer = null;
-function setStat(el, kind) {   // saving → syncing → saved; offline → pending; fallo → error (clic = reintentar). Nunca «Sincronizado» sin confirmación.
-  const key = { saving:'sync.saving', syncing:'sync.syncing', pending:'sync.pending', error:'sync.errorRetry', saved:'sync.synced' }[kind] || 'sync.synced';
-  el.textContent = t(key); el.dataset.state = kind;
-  el.classList.toggle('ok', kind === 'saved'); el.classList.toggle('busy', kind === 'saving' || kind === 'syncing'); el.classList.toggle('err', kind === 'error');
+// Indicador ÚNICO del día (mismo criterio que la insignia de la página principal): combina nota y dibujo.
+// Prioridad: error > pendiente (sin red) > guardando > sincronizando > sincronizado. «Sincronizado» solo si ninguno tiene nada sin confirmar.
+const DAY_ORDER = ['saved', 'syncing', 'saving', 'pending', 'error'];
+function itemState(typing, queued) { const net = navigator.onLine && state.cloudReady; return typing ? 'saving' : queued ? (net ? (syncFailed ? 'error' : 'syncing') : 'pending') : 'saved'; }
+function dayState() {
+  if (!currentDate) return 'saved';
+  const parts = [itemState(!!noteTimer, isQueued('note:' + currentDate)), itemState(drawing.dirty, isQueued('drawing:' + currentDate))];
+  return parts.reduce((a, b) => DAY_ORDER.indexOf(b) > DAY_ORDER.indexOf(a) ? b : a, 'saved');
 }
 function refreshStatuses() {
-  if (!currentDate) return;
-  const net = navigator.onLine && state.cloudReady;
-  const st = (typing, queued) => typing ? 'saving' : queued ? (net ? (syncFailed ? 'error' : 'syncing') : 'pending') : 'saved';
-  setStat(els.saveStatus, st(!!noteTimer, isQueued('note:' + currentDate)));
-  setStat(els.drawingStatus, st(drawing.dirty, isQueued('drawing:' + currentDate)));
+  const k = dayState(), el = els.daySync;
+  el.textContent = { saving:t('sync.saving'), syncing:t('sync.syncing'), pending:t('sync.pending'), error:t('sync.errorRetry'), saved:t('sync.synced') }[k];
+  el.dataset.state = k;
+  el.className = 'sync-badge ' + ({ saved:'success', syncing:'loading', saving:'loading', pending:'warning', error:'warning' }[k]) + (k === 'error' ? ' retry' : '');
 }
 
 // ---- Notas ----
@@ -1062,9 +1081,9 @@ function commitNoteNow() {
   renderCalendar();
 }
 function scheduleNoteSave() {
-  setStat(els.saveStatus, 'saving');
   clearTimeout(noteTimer);
   noteTimer = setTimeout(commitNoteNow, 500);
+  refreshStatuses();
 }
 
 // Selección: se recuerda para que los controles del dock no la pierdan
@@ -1171,7 +1190,6 @@ async function loadDrawing(date) {
   ctx.clearRect(0, 0, CANVAS_W, CANVAS_H);
   let data = getLocalDrawing(date);
   if (data === undefined && state.drawingIndex[date] && state.cloudReady && navigator.onLine) {
-    els.drawingStatus.textContent = t('drawing.loading');
     try {
       const { data: row, error } = await supabaseClient.from('drawings_by_date').select('drawing_data').eq('user_id', user.id).eq('drawing_date', date).maybeSingle();
       if (error) throw error;
@@ -1217,7 +1235,7 @@ function moveDraw(ev) { if (!drawing.active) return; ev.preventDefault(); const 
 function endDraw() {
   if (!drawing.active) return;
   drawing.active = false; drawing.dirty = true; if (!drawing.erasing) drawing.hasInk = true;
-  setStat(els.drawingStatus, 'saving'); clearTimeout(drawing.timer); drawing.timer = setTimeout(saveDrawingNow, 600);
+  refreshStatuses(); clearTimeout(drawing.timer); drawing.timer = setTimeout(saveDrawingNow, 600);
 }
 function drawTo(x1, y1, x2, y2, k) {
   const ctx = els.canvas.getContext('2d');
@@ -1230,9 +1248,8 @@ function drawTo(x1, y1, x2, y2, k) {
 function setEraser(next) {
   drawing.erasing = next;
   els.eraserBtn.classList.toggle('active', next);
-  els.eraserBtn.textContent = next ? '✎ ' + t('drawing.pencil') : '⌫ ' + t('drawing.eraser');
+  els.eraserBtn.textContent = next ? '✎' : '⌫'; els.eraserBtn.setAttribute('aria-label', next ? t('drawing.pencil') : t('drawing.eraser')); els.eraserBtn.setAttribute('aria-pressed', String(next));
   els.eraserBtn.title = next ? t('drawing.pencil') : t('drawing.eraser');
-  els.eraserBtn.style.width = 'auto'; els.eraserBtn.style.padding = '0 12px';
 }
 function clearCanvas() {
   els.canvas.getContext('2d').clearRect(0, 0, CANVAS_W, CANVAS_H);
@@ -1284,14 +1301,14 @@ els.actSave.addEventListener('click', saveActivity); els.actDelete.addEventListe
 els.actCancel.addEventListener('click', closeActivityModal); els.closeActBtn.addEventListener('click', closeActivityModal);
 els.activityModal.addEventListener('click', ev => { if (ev.target.dataset.closeAct) closeActivityModal(); });
 els.actTitle.addEventListener('keydown', ev => { if (ev.key === 'Enter') saveActivity(); });
-[els.saveStatus, els.drawingStatus, els.syncStatus].forEach(e => e.addEventListener('click', () => { if (syncFailed && !flushing) flushQueue(); }));   // «Error · Reintentar»
+[els.daySync, els.syncStatus].forEach(e => e.addEventListener('click', () => { if (syncFailed && !flushing) flushQueue(); }));   // «Error · Reintentar»
 
 // Espacio diario
 els.wsBack.addEventListener('click', requestCloseWorkspace);
 els.wsPrevDay.addEventListener('click', () => changeDay(-1));
 els.wsNextDay.addEventListener('click', () => changeDay(1));
-els.modeWrite.addEventListener('click', () => setMode('write'));
-els.modeDraw.addEventListener('click', () => setMode('draw'));
+els.modeWrite.addEventListener('click', () => setPanel('notes', !panelOpen.notes));
+els.modeDraw.addEventListener('click', () => setPanel('draw', !panelOpen.draw));
 els.textTools.addEventListener('mousedown', ev => { if (ev.target.closest('button')) ev.preventDefault(); });   // los botones no quitan el foco/selección del editor
 els.noteEditor.addEventListener('input', () => { scheduleNoteSave(); if (!els.legacyBanner.classList.contains('hidden')) renderLegacyBanner(); });
 els.noteEditor.addEventListener('change', ev => {       // el estado de un checkbox no se serializa en innerHTML: se refleja como atributo
@@ -1310,9 +1327,15 @@ els.canvas.addEventListener('pointerdown', beginDraw);
 els.canvas.addEventListener('pointermove', moveDraw);
 els.canvas.addEventListener('pointerup', endDraw);
 els.canvas.addEventListener('pointercancel', endDraw);
-els.brushSize.addEventListener('input', () => els.brushSizeValue.textContent = els.brushSize.value);
+function updateSizeDot() { const v = Number(els.brushSize.value); els.brushSizeValue.textContent = v; els.sizeDot.style.width = els.sizeDot.style.height = (4 + Math.round(v * 0.45)) + 'px'; }
+function closeSizePop() { els.sizePop.classList.add('hidden'); els.sizeBtn.setAttribute('aria-expanded', 'false'); els.sizeBtn.classList.remove('active'); }
+function toggleSizePop() { const open = els.sizePop.classList.contains('hidden'); els.sizePop.classList.toggle('hidden', !open); els.sizeBtn.setAttribute('aria-expanded', String(open)); els.sizeBtn.classList.toggle('active', open); if (open) els.brushSize.focus({ preventScroll:true }); }
+els.brushSize.addEventListener('input', updateSizeDot); updateSizeDot();
+els.sizeBtn.addEventListener('click', toggleSizePop);
+document.addEventListener('pointerdown', ev => { if (!els.sizePop.classList.contains('hidden') && !ev.target.closest('#sizePop, #sizeBtn')) closeSizePop(); });   // se cierra al tocar fuera (incluido el lienzo) o al usar otra herramienta
+new ResizeObserver(() => layoutCanvas()).observe(els.canvasWrap);   // el lienzo se reajusta solo (solo CSS: el bitmap no cambia)
 els.brushColor.addEventListener('input', () => { drawing.colorTouched = true; setEraser(false); });
-els.eraserBtn.addEventListener('click', () => setEraser(!drawing.erasing));
+els.eraserBtn.addEventListener('click', () => { closeSizePop(); setEraser(!drawing.erasing); });
 els.clearCanvasBtn.addEventListener('click', () => { if (confirm(t('drawing.confirm'))) clearCanvas(); });
 
 // Modal de actividad
@@ -1326,7 +1349,8 @@ els.scheduleModal.addEventListener('click', ev => { if (ev.target.dataset.closeM
 
 document.addEventListener('keydown', ev => {
   if (ev.key !== 'Escape') return;
-  if (!els.quickMenu.classList.contains('hidden')) closeQuickMenu();
+  if (!els.sizePop.classList.contains('hidden')) closeSizePop();
+  else if (!els.quickMenu.classList.contains('hidden')) closeQuickMenu();
   else if (!els.activityModal.classList.contains('hidden')) closeActivityModal();
   else if (!els.scheduleModal.classList.contains('hidden')) closeModal();
   else if (!els.settingsModal.classList.contains('hidden')) closeSettings();

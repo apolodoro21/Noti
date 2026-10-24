@@ -7,11 +7,11 @@
   <meta name="description" content="Noti: horarios, notas, pendientes y dibujo sincronizados entre tus dispositivos.">
   <link rel="manifest" href="manifest.webmanifest">
   <link rel="icon" href="icons/icon.svg" type="image/svg+xml">
-  <link rel="stylesheet" href="styles.css?v=0.5.1">
+  <link rel="stylesheet" href="styles.css?v=0.5.2">
   <title>Noti</title>
 </head>
 <body>
-  <div id="versionBadge" class="version-badge" aria-label="Versión de Noti">v0.5.1</div>
+  <div id="versionBadge" class="version-badge" aria-label="Versión de Noti">v0.5.2</div>
 
   <div id="authScreen" class="auth-screen">
     <div class="auth-card card">
@@ -95,31 +95,19 @@
       </section>
 
       <section id="upcomingCard" class="card upcoming-card" aria-labelledby="upcTitle">
-        <div class="section-head"><div><span class="muted" data-i18n="upc.label">PENDIENTES</span><h3 id="upcTitle" data-i18n="upc.title">Próximas actividades</h3></div></div>
+        <div class="section-head"><div><span class="muted" data-i18n="upc.label">PRÓXIMAS ACTIVIDADES</span><h3 id="upcTitle" data-i18n="upc.title">Pendientes</h3></div></div>
         <div id="upcomingList" class="upcoming-list"></div>
-      </section>
-
-      <section class="day-heading card" id="agendaCard">
-        <div>
-          <span class="muted" data-i18n="day.sheet">HOJA DEL DÍA</span>
-          <h2 id="dayTitle">Lunes</h2>
-        </div>
       </section>
 
       <section id="scheduleSection" class="card">
         <div class="section-head">
           <div>
-            <span class="muted" data-i18n="schedule.label">HORARIO</span>
+            <span id="schedLabel" class="muted" data-i18n="schedule.label">HORARIO</span>
             <h3 data-i18n="schedule.title">Asignaturas y actividades</h3>
           </div>
           <span id="scheduleCount" class="pill">0 bloques</span>
         </div>
         <div id="scheduleList" class="schedule-list"></div>
-      </section>
-
-      <section id="activitySection" class="card">
-        <div class="section-head"><div><span class="muted" data-i18n="act.label">TAREAS</span><h3 data-i18n="act.title">Actividades y tareas</h3></div></div>
-        <div id="activityList" class="act-list"></div>
       </section>
     </main>
 
@@ -135,9 +123,11 @@
       <header class="ws-top">
         <button id="wsBack" class="secondary-btn ws-back" type="button" aria-label="Volver al calendario"><span aria-hidden="true">‹</span> <span data-i18n="ws.back">Calendario</span></button>
         <div class="ws-title">
+          <span class="ws-kicker" data-i18n="day.sheet">HOJA DEL DÍA</span>
           <span id="wsWeekday" class="muted"></span>
           <h2 id="wsDate"></h2>
         </div>
+        <span id="daySync" class="sync-badge" role="status" aria-live="polite">Sincronizado</span>
         <div class="ws-day-nav">
           <button id="wsAddBtn" class="quick-add square" type="button" aria-haspopup="menu" aria-label="Agregar" title="Agregar">+</button>
           <button id="wsPrevDay" class="icon-btn" type="button" aria-label="Día anterior" title="Día anterior">‹</button>
@@ -151,8 +141,7 @@
       <div id="wsStage" class="ws-stage">
         <article id="notePanel" class="ws-panel open card">
           <header class="panel-head">
-            <button id="modeWrite" class="panel-toggle mode-btn" type="button" data-mode="write" aria-expanded="true" aria-controls="noteBody"><span class="chev" aria-hidden="true">›</span><span><span class="muted" data-i18n="notes.label">NOTAS</span><b data-i18n="notes.title">Apuntes del día</b></span></button>
-            <span id="saveStatus" class="save-status" role="status">Sin cambios</span>
+            <button id="modeWrite" class="panel-toggle mode-btn" type="button" data-mode="write" aria-expanded="true" aria-controls="noteBody"><span class="chev" aria-hidden="true">›</span><b data-i18n="panel.notes">Notas</b></button>
           </header>
           <div id="noteBody" class="panel-body">
             <div id="textTools" class="dock-tools">
@@ -181,25 +170,16 @@
         </article>
         <article id="drawPanel" class="ws-panel card">
           <header class="panel-head">
-            <button id="modeDraw" class="panel-toggle mode-btn" type="button" data-mode="draw" aria-expanded="false" aria-controls="drawBody"><span class="chev" aria-hidden="true">›</span><span><span class="muted" data-i18n="drawing.label">LIENZO</span><b data-i18n="drawing.title">Dibujo a mano alzada</b></span></button>
-            <span id="drawingStatus" class="save-status" role="status">Sin cambios</span>
+            <button id="modeDraw" class="panel-toggle mode-btn" type="button" data-mode="draw" aria-expanded="false" aria-controls="drawBody"><span class="chev" aria-hidden="true">›</span><b data-i18n="panel.draw">Lienzo</b></button>
+            <div id="drawTools" class="dock-tools head-tools" inert>
+              <label class="color-picker" title="Color"><input id="brushColor" type="color" value="#e8edf2" aria-label="Color"></label>
+              <button id="sizeBtn" class="tool-btn" type="button" title="Grosor" aria-label="Grosor" aria-haspopup="true" aria-expanded="false" aria-controls="sizePop"><span id="sizeDot" class="size-dot"></span></button>
+              <button id="eraserBtn" class="tool-btn" type="button" title="Borrador" aria-label="Borrador">⌫</button>
+              <button id="clearCanvasBtn" class="danger-outline" type="button" data-i18n="drawing.clear">Limpiar</button>
+            </div>
           </header>
           <div id="drawBody" class="panel-body" inert>
-            <div id="drawTools" class="dock-tools">
-          <label class="color-picker" title="Color">
-            <span data-i18n="drawing.color">Color</span>
-            <input id="brushColor" type="color" value="#e8edf2">
-          </label>
-          <label class="size-control" title="Grosor">
-            <span data-i18n="drawing.size">Grosor</span>
-            <input id="brushSize" type="range" min="1" max="32" value="5">
-            <output id="brushSizeValue">5</output>
-          </label>
-          <button id="eraserBtn" class="tool-btn" type="button" title="Borrador">⌫</button>
-          <button id="clearCanvasBtn" class="danger-outline" type="button" data-i18n="drawing.clear">Limpiar</button>
-          
-        </div>
-
+            <div id="sizePop" class="size-pop hidden" role="group" aria-label="Grosor del trazo"><input id="brushSize" type="range" min="1" max="32" value="5" aria-label="Grosor"><output id="brushSizeValue">5</output></div>
             <div id="canvasWrap" class="canvas-wrap"><canvas id="drawingCanvas" aria-label="Lienzo para dibujar"></canvas></div>
           </div>
         </article>
@@ -328,7 +308,7 @@
   <div id="toast" class="toast" role="status" aria-live="polite"></div>
 
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-  <script src="noti-core.js?v=0.5.1"></script>
-  <script src="app.js?v=0.5.1"></script>
+  <script src="noti-core.js?v=0.5.2"></script>
+  <script src="app.js?v=0.5.2"></script>
 </body>
 </html>
