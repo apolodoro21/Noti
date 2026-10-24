@@ -310,3 +310,58 @@ body.ws-open .workspace { opacity:1; visibility:visible; transform:none; transit
 #appScreen { overflow-x:clip; }
 body.ws-open { overflow:hidden; }
 body.ws-open .version-badge { opacity:0; }
+
+/* =====================  NOTI 0.5.0  ===================== */
+/* Paletas nuevas (acento). Las claras de «blanco» usan acento oscuro sobre tema claro para no desaparecer. */
+html[data-palette="coral"] { --accent:#ff5a4f; --accent-2:#ff9a3d; --accent-soft:rgba(255,90,79,.18); --border:rgba(255,90,79,.26); --border-strong:rgba(255,90,79,.52); }
+html[data-palette="electric"] { --accent:#2f6bff; --accent-2:#00c2ff; --accent-soft:rgba(47,107,255,.18); --border:rgba(47,107,255,.28); --border-strong:rgba(47,107,255,.55); }
+html[data-palette="white"] { --accent:#ffffff; --accent-2:#d9dee7; --accent-soft:rgba(255,255,255,.14); --border:rgba(255,255,255,.22); --border-strong:rgba(255,255,255,.5); }
+html[data-theme="light"][data-palette="white"] { --accent:#334155; --accent-2:#64748b; --accent-soft:rgba(51,65,85,.10); --border:rgba(51,65,85,.22); --border-strong:rgba(51,65,85,.46); }
+html[data-theme="light"][data-palette="white"] .cal-cell.today .num { color:#fff; }
+/* Gris tenue: gris medio-oscuro neutro, texto #e9ecf1 (contraste > 10:1), superficies a pasos de ~6% de luminosidad */
+html[data-theme="gray"] { --bg:#2b2f36; --panel:#353a42; --panel-2:#3d434c; --surface:rgba(255,255,255,.05); --text:#e9ecf1; --muted:#a3abb7; --shadow:0 14px 36px rgba(0,0,0,.22); }
+html[data-theme="gray"] .cal-cell.today .num { color:#1d2127; }
+html[data-theme="gray"] .modal-backdrop { background:rgba(20,22,26,.6); }
+
+/* Temas de App: solo cambian forma/superficie (independiente de la paleta). «soft» = Noti 0.4 sin cambios. */
+html[data-style="square"] { --radius:0; }
+html[data-style="square"] :is(.card,.modal-card,.cal-cell,.secondary-btn,.primary-btn,.danger-outline,.icon-btn,.tool-btn,.schedule-row,.empty-state,.ws-chip,.note-editor,#drawingCanvas,select,.field input,.schedule-form input,.palette-option,.legacy-banner,.notice,.scope-box,.toast,.auth-tabs,.auth-tab,.segmented-control button) { border-radius:0; }
+html[data-style="square"] .card, html[data-style="square"] .modal-card { box-shadow:none; border-width:1.5px; border-color:var(--border-strong); }
+
+html[data-style="glass"] { --radius:14px; }
+html[data-style="glass"] body { background:radial-gradient(circle at 12% 8%,color-mix(in srgb,var(--accent) 38%,transparent),transparent 30rem),radial-gradient(circle at 90% 70%,color-mix(in srgb,var(--accent-2) 32%,transparent),transparent 32rem),var(--bg); background-attachment:fixed; }
+html[data-style="glass"] :is(.card,.modal-card,.cal-cell,.secondary-btn,.primary-btn,.danger-outline,.icon-btn,.tool-btn,.schedule-row,.empty-state,.ws-chip,.note-editor,#drawingCanvas,select,.field input,.schedule-form input,.palette-option,.legacy-banner,.notice,.scope-box,.toast,.auth-tabs,.auth-tab,.segmented-control button) { border-radius:12px; }
+html[data-style="glass"] .card, html[data-style="glass"] .modal-card { background:linear-gradient(135deg,color-mix(in srgb,var(--accent) 16%,transparent),color-mix(in srgb,var(--panel) 62%,transparent)); border-color:rgba(255,255,255,.18); }
+html[data-style="glass"] .cal-cell, html[data-style="glass"] .schedule-row { background:color-mix(in srgb,var(--panel) 40%,transparent); }
+@supports (backdrop-filter:blur(1px)) or (-webkit-backdrop-filter:blur(1px)) { html[data-style="glass"] .card, html[data-style="glass"] .modal-card { -webkit-backdrop-filter:blur(14px) saturate(1.25); backdrop-filter:blur(14px) saturate(1.25); } }
+@supports not ((backdrop-filter:blur(1px)) or (-webkit-backdrop-filter:blur(1px))) { html[data-style="glass"] .card, html[data-style="glass"] .modal-card { background:var(--panel); } }
+
+html[data-style="bold"] { --radius:0; --bd:#000; --hard:5px 5px 0 #000; }
+html[data-style="bold"] :is(.card,.modal-card,.cal-cell,.secondary-btn,.primary-btn,.danger-outline,.icon-btn,.tool-btn,.schedule-row,.empty-state,.ws-chip,.note-editor,#drawingCanvas,select,.field input,.schedule-form input,.palette-option,.legacy-banner,.notice,.scope-box,.toast,.auth-tabs,.auth-tab,.segmented-control button) { border-radius:0; }
+html[data-style="bold"] .card, html[data-style="bold"] .modal-card { background:var(--panel); border:3px solid var(--bd); box-shadow:var(--hard); }
+html[data-style="bold"] :is(.secondary-btn,.primary-btn,.danger-outline,.icon-btn,.tool-btn,select,.field input,.schedule-form input,.palette-option,.cal-cell,.schedule-row,.ws-chip,.legacy-banner,.scope-box,.note-editor,#drawingCanvas) { border:2px solid var(--bd); box-shadow:none; }
+html[data-style="bold"] :is(.secondary-btn,.primary-btn,.icon-btn,.tool-btn) { box-shadow:3px 3px 0 var(--bd); }
+html[data-style="bold"] .primary-btn, html[data-style="bold"] .cal-cell.selected, html[data-style="bold"] .chip[aria-pressed="true"], html[data-style="bold"] .tool-btn.active, html[data-style="bold"] .segmented-control .active { background:var(--accent); color:#000; }
+html[data-style="bold"] .cal-cell.today .num { border-radius:0; color:#000; outline:2px solid #000; }
+html[data-style="bold"] .cal-cell, html[data-style="bold"] .note-editor, html[data-style="bold"] select { background:var(--panel-2); }
+html[data-theme="dark"][data-style="bold"], html[data-theme="gray"][data-style="bold"] { --panel:#1c2330; --panel-2:#232c3b; }
+html[data-theme="gray"][data-style="bold"] { --panel:#3a4049; --panel-2:#444b55; }
+html[data-style="bold"] .primary-btn:active, html[data-style="bold"] .tool-btn:active { transform:translate(3px,3px); box-shadow:0 0 0 var(--bd); }
+
+.style-grid { display:grid; grid-template-columns:repeat(4,1fr); gap:9px; margin-top:10px; }
+.style-swatch { width:34px; height:22px; border:2px solid var(--accent); background:var(--accent-soft); display:block; }
+.style-swatch.style-soft { border-radius:9px; } .style-swatch.style-square { border-radius:0; }
+.style-swatch.style-glass { border-radius:6px; background:linear-gradient(135deg,var(--accent),transparent); border-color:rgba(255,255,255,.4); }
+.style-swatch.style-bold { border-radius:0; background:var(--accent); border-color:#000; box-shadow:3px 3px 0 #000; }
+@media (max-width:620px) { .style-grid { grid-template-columns:repeat(2,1fr); } .segmented-control:has(#grayModeBtn) { grid-template-columns:1fr 1fr 1fr; } }
+.segmented-control:has(#grayModeBtn) { grid-template-columns:1fr 1fr 1fr; }
+
+/* Microinteracciones discretas (se anulan con prefers-reduced-motion) */
+.secondary-btn:active, .primary-btn:active, .icon-btn:active, .tool-btn:active, .cal-cell:active { transform:scale(.97); }
+.schedule-row:hover { border-color:var(--border-strong); }
+.note-editor { animation:notiFade .25s ease both; }
+.save-status.busy { animation:notiPulse 1s ease-in-out infinite; }
+button:disabled { opacity:.55; cursor:wait; }
+@keyframes notiFade { from { opacity:0; transform:translateY(4px); } to { opacity:1; transform:none; } }
+@keyframes notiPulse { 50% { opacity:.45; } }
+@media (prefers-reduced-motion: reduce) { .note-editor, .save-status.busy { animation:none !important; } .secondary-btn:active, .primary-btn:active, .icon-btn:active, .tool-btn:active, .cal-cell:active { transform:none; } }

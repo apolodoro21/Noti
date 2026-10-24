@@ -79,7 +79,16 @@
     return { closed, fresh };
   }
 
-  const api = { pad, toISO, parseISO, isISO, todayISO, addDays, addMonths, dbWeekday, isLeap, daysInMonth, monthGrid,
+  // ---- Importación de Noti 3.0: identidad estable = tipo + día de la semana del registro antiguo (notes/drawings tienen PK (user_id, day_of_week)) ----
+  const legacyId = (kind, dayId) => `${kind}:${dayId}`;
+  const legacyPending = (map, kind, dayId) => !(map || {})[legacyId(kind, dayId)];
+  function legacyMark(map, kind, dayId, status, date, at) { // la primera decisión se conserva: repetir no cambia nada (idempotente)
+    const k = legacyId(kind, dayId); if ((map || {})[k]) return map;
+    return { ...(map || {}), [k]: { status, date: date || null, at: at || new Date().toISOString() } };
+  }
+  const mergeLegacy = (remote, local) => ({ ...(local || {}), ...(remote || {}) });
+
+  const api = { legacyId, legacyPending, legacyMark, mergeLegacy, pad, toISO, parseISO, isISO, todayISO, addDays, addMonths, dbWeekday, isLeap, daysInMonth, monthGrid,
     normTime, parseLegacyTime, timeRangeLabel, occursOn, resolveForDate, splitSeries };
   if (typeof module !== 'undefined' && module.exports) module.exports = api;
   root.NotiCore = api;

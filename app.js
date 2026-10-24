@@ -1,4 +1,4 @@
-/* Noti 0.4.0 — calendario real, espacio diario y horarios recurrentes.
+/* Noti 0.5.0 — calendario real, espacio diario y horarios recurrentes.
    Basado en Noti 3.0 (mismo Supabase, auth, preferencias, i18n y editor). */
 const SUPABASE_URL = 'https://ueyakwaxvotartkcnyhj.supabase.co';
 const SUPABASE_PUBLISHABLE_KEY = 'sb_publishable_GHLYL_7tgXlpsgB5b7rl5Q_qQ_a-Eai'; // clave pública (anon): la seguridad la imponen las políticas RLS
@@ -6,7 +6,7 @@ const supabaseClient = window.supabase.createClient(SUPABASE_URL, SUPABASE_PUBLI
   auth: { persistSession: true, autoRefreshToken: true, detectSessionInUrl: true }
 });
 const C = window.NotiCore;
-const APP_VERSION = '0.4.0';
+const APP_VERSION = '0.5.0';
 const CANVAS_W = 1600, CANVAS_H = 1200;           // superficie lógica fija: el dibujo es idéntico en cualquier dispositivo
 const EXPORT_W = 1200, EXPORT_H = 900;
 
@@ -32,7 +32,7 @@ function newState() {
   const d = C.parseISO(today);
   return { selectedDate: today, viewYear: d.getFullYear(), viewMonth: d.getMonth(), followToday: true,
     notes: {}, drawings: {}, drawingIndex: {}, items: [], exceptions: [], queue: [],
-    legacy: { notes:{}, drawings:{}, fonts:{} }, cloudReady: true };
+    legacy: { notes:{}, drawings:{}, fonts:{} }, legacyImport: {}, cloudReady: true };
 }
 
 const $ = id => document.getElementById(id);
@@ -41,7 +41,7 @@ const els = {};
  'welcomeLine','syncStatus','drawingStatus','logoutBtn','settingsBtn','settingsModal','closeSettingsBtn','closeSettingsFooterBtn','languageSelect',
  'lightModeBtn','darkModeBtn','paletteOptions','settingsSaveStatus','dayTitle','daySubtitle','scheduleList','scheduleCount','noteEditor','fontSelect',
  'fontSizeSelect','highlightBtn','checklistBtn','saveStatus','brushColor','brushSize','brushSizeValue','eraserBtn','clearCanvasBtn','installBtn',
- 'scheduleModal','closeModalBtn','toast','calTitle','calGrid','calWeekdays','calPrev','calNext','calToday','openDayBtn','editScheduleBtn',
+ 'scheduleModal','closeModalBtn','toast','calTitle','calGrid','calWeekdays','calPrev','calNext','calToday','authUsername','usernameField','grayModeBtn','styleOptions','editScheduleBtn',
  'workspace','wsBack','wsWeekday','wsDate','wsPrevDay','wsNextDay','wsSchedule','wsStage','canvasWrap','notePanel','noteRestore','legacyBanner',
  'modeWrite','modeDraw','textTools','drawTools','centerNoteBtn','migrationBanner','versionBadge',
  'scopeBox','kindBox','schSubject','schMeta','schStart','schEnd','weekdaysBox','weekdayChips','rangeBox','schStartDate','schEndDate','singleBox',
@@ -50,13 +50,18 @@ const els = {};
 els.canvas = $('drawingCanvas');
 els.versionBadge.textContent = `v${APP_VERSION}`;
 
-const DEFAULT_PREFERENCES = { language: 'es', theme: 'dark', palette: 'blue' };
+const DEFAULT_PREFERENCES = { language: 'es', theme: 'dark', palette: 'blue', appStyle: 'soft' };
+const APP_STYLES = ['square', 'soft', 'glass', 'bold'];
+const UPCOMING_DAYS = 7;   // ventana de «Próximas actividades» (reservada: ver CAMBIOS_0.5.0.md)
 const PALETTES = [
   { id:'blue', name:{es:'Azul suave',en:'Soft blue'}, colors:['#7aa7f8','#8f82e8'] },
   { id:'lavender', name:{es:'Lavanda',en:'Lavender'}, colors:['#9b8ce8','#c29bea'] },
   { id:'mint', name:{es:'Menta',en:'Mint'}, colors:['#65b9a4','#7fc8b0'] },
   { id:'peach', name:{es:'Durazno',en:'Peach'}, colors:['#e4a17d','#e5b27f'] },
-  { id:'rose', name:{es:'Rosa',en:'Rose'}, colors:['#d98ba9','#c99bdc'] }
+  { id:'rose', name:{es:'Rosa',en:'Rose'}, colors:['#d98ba9','#c99bdc'] },
+  { id:'coral', name:{es:'Coral',en:'Coral'}, colors:['#ff5a4f','#ff9a3d'] },
+  { id:'electric', name:{es:'Eléctrico',en:'Electric'}, colors:['#2f6bff','#00c2ff'] },
+  { id:'white', name:{es:'Blanco',en:'White'}, colors:['#ffffff','#d9dee7'] }
 ];
 
 const I18N = {
@@ -89,7 +94,7 @@ const I18N = {
 };
 
 
-// ---- Traducciones nuevas de 0.4.0 (se fusionan con las de 3.0) ----
+// ---- Traducciones nuevas de 0.5.0 (se fusionan con las de 3.0) ----
 const I18N_V4 = {
   es: {
     'cal.label':'CALENDARIO','cal.today':'Hoy','cal.prev':'Mes anterior','cal.next':'Mes siguiente','cal.legendNote':'Nota','cal.legendDraw':'Dibujo','cal.legendSched':'Horario',
@@ -101,7 +106,7 @@ const I18N_V4 = {
     'sch.tagSingle':'Fecha única','sch.tagChanged':'Modificada solo hoy','sch.tagRepeats':'Semanal',
     'legacy.note':'Hay una nota de Noti 3.0 guardada para los {day}.','legacy.drawing':'Hay un dibujo de Noti 3.0 guardado para los {day}.','legacy.importNote':'Importar nota aquí','legacy.importDrawing':'Importar dibujo aquí','legacy.imported':'Importado a esta fecha',
     'sync.pending':'Pendiente de sincronizar','sync.offlineQueued':'Sin conexión: tus cambios están guardados y se enviarán al reconectar.','sync.storageFull':'El almacenamiento del navegador está lleno; este dibujo solo se conserva en la nube.',
-    'sync.migrationNeeded':'Falta ejecutar SUPABASE_MIGRACION_0.4.0.sql en Supabase. Mientras tanto Noti guarda todo en este dispositivo y lo subirá cuando la migración esté aplicada.',
+    'sync.migrationNeeded':'Falta ejecutar SUPABASE_MIGRACION_0.5.0.sql en Supabase. Mientras tanto Noti guarda todo en este dispositivo y lo subirá cuando la migración esté aplicada.',
     'drawing.loading':'Cargando…','notes.selectSize':'Selecciona el texto al que quieres aplicar el tamaño.','notes.selectHighlight':'Selecciona el texto que quieres resaltar.','day.fullDate':'{weekday}, {date}'
   },
   en: {
@@ -114,11 +119,15 @@ const I18N_V4 = {
     'sch.tagSingle':'Single date','sch.tagChanged':'Changed for this date','sch.tagRepeats':'Weekly',
     'legacy.note':'There is a Noti 3.0 note saved for {day}.','legacy.drawing':'There is a Noti 3.0 drawing saved for {day}.','legacy.importNote':'Import note here','legacy.importDrawing':'Import drawing here','legacy.imported':'Imported into this date',
     'sync.pending':'Pending sync','sync.offlineQueued':'Offline: your changes are saved and will be sent when you reconnect.','sync.storageFull':'Browser storage is full; this drawing is only kept in the cloud.',
-    'sync.migrationNeeded':'SUPABASE_MIGRACION_0.4.0.sql has not been run in Supabase yet. Meanwhile Noti keeps everything on this device and will upload it once the migration is applied.',
+    'sync.migrationNeeded':'SUPABASE_MIGRACION_0.5.0.sql has not been run in Supabase yet. Meanwhile Noti keeps everything on this device and will upload it once the migration is applied.',
     'drawing.loading':'Loading…','notes.selectSize':'Select the text you want to resize.','notes.selectHighlight':'Select the text you want to highlight.','day.fullDate':'{weekday}, {date}'
   }
 };
-['es','en'].forEach(l => Object.assign(I18N[l], I18N_V4[l]));
+const I18N_V5 = {
+  es: { 'auth.email':'Correo o usuario','auth.emailPlaceholder':'Usuario o tucorreo@email.com','auth.username':'Nombre de usuario','auth.usernamePlaceholder':'usuario','auth.empty':'Escribe tu usuario o correo y tu contraseña.','auth.userNotFound':'Usuario no encontrado.','auth.wrongPassword':'Contraseña incorrecta.','auth.network':'No se pudo comprobar el usuario. Revisa tu conexión e inténtalo de nuevo.','auth.usernameInvalid':'El usuario debe tener 3–20 caracteres (letras, números, _ . -), sin espacios ni @.','auth.usernameTaken':'Ese nombre de usuario ya está en uso.','auth.emailNeeded':'Para crear una cuenta escribe un correo válido.','auth.rateLimit':'Se alcanzó el límite de envío de correos. Espera unos minutos e inténtalo otra vez.','welcome':'Hola, {name}','settings.gray':'Gris tenue','settings.style':'Temas de App','style.square':'Cuadrado','style.soft':'Bordes suaves','style.glass':'Glass','style.bold':'Bold minimalista','schedule.next':'Próxima','legacy.skip':'No importar' },
+  en: { 'auth.email':'Email or username','auth.emailPlaceholder':'Username or you@email.com','auth.username':'Username','auth.usernamePlaceholder':'username','auth.empty':'Enter your username or email and your password.','auth.userNotFound':'User not found.','auth.wrongPassword':'Incorrect password.','auth.network':'Could not check the username. Check your connection and try again.','auth.usernameInvalid':'Username must be 3–20 characters (letters, digits, _ . -), no spaces or @.','auth.usernameTaken':'That username is already taken.','auth.emailNeeded':'Enter a valid email to create an account.','auth.rateLimit':'Email sending limit reached. Wait a few minutes and try again.','welcome':'Hi, {name}','settings.gray':'Soft gray','settings.style':'App themes','style.square':'Square','style.soft':'Soft edges','style.glass':'Glass','style.bold':'Bold minimal','schedule.next':'Next','legacy.skip':'Do not import' }
+};
+['es','en'].forEach(l => Object.assign(I18N[l], I18N_V4[l], I18N_V5[l]));
 
 let preferences = { ...DEFAULT_PREFERENCES };
 let preferencesLoadedFromCloud = false;
@@ -138,10 +147,12 @@ function fmtLong(iso) {
 function fmtFull(iso) { return t('day.fullDate', { weekday: dayName(dayIdOf(iso)), date: fmtLong(iso) }); }
 
 function normalizePreferences(value) {
-  const next = { ...DEFAULT_PREFERENCES, ...(value || {}) };
+  const v = value || {}, next = { ...DEFAULT_PREFERENCES };
+  ['language', 'theme', 'palette', 'appStyle'].forEach(k => { if (v[k] !== undefined) next[k] = v[k]; });
   if (!['es','en'].includes(next.language)) next.language = 'es';
-  if (!['dark','light'].includes(next.theme)) next.theme = 'dark';
+  if (!['dark','light','gray'].includes(next.theme)) next.theme = 'dark';
   if (!PALETTES.some(p => p.id === next.palette)) next.palette = 'blue';
+  if (!APP_STYLES.includes(next.appStyle)) next.appStyle = 'soft';
   return next;
 }
 
@@ -150,8 +161,9 @@ function applyPreferences() {
   document.documentElement.lang = preferences.language;
   document.documentElement.dataset.theme = preferences.theme;
   document.documentElement.dataset.palette = preferences.palette;
+  document.documentElement.dataset.style = preferences.appStyle;
   const themeMeta = document.querySelector('meta[name="theme-color"]');
-  if (themeMeta) themeMeta.content = preferences.theme === 'light' ? '#f5f7fb' : '#080b10';
+  if (themeMeta) themeMeta.content = preferences.theme === 'light' ? '#f5f7fb' : preferences.theme === 'gray' ? '#2b2f36' : '#080b10';
   document.querySelectorAll('[data-i18n]').forEach(el => { el.innerHTML = t(el.dataset.i18n); });
   document.querySelectorAll('[data-i18n-placeholder]').forEach(el => { el.placeholder = t(el.dataset.i18nPlaceholder); });
   els.noteEditor.dataset.placeholder = t('editor.placeholder');
@@ -184,6 +196,9 @@ function renderSettingsControls() {
   els.languageSelect.value = preferences.language;
   els.lightModeBtn.classList.toggle('active', preferences.theme === 'light');
   els.darkModeBtn.classList.toggle('active', preferences.theme === 'dark');
+  els.grayModeBtn.classList.toggle('active', preferences.theme === 'gray');
+  els.styleOptions.innerHTML = APP_STYLES.map(id => `<button class="palette-option style-option ${preferences.appStyle === id ? 'active' : ''}" type="button" data-style="${id}"><span class="style-swatch style-${id}"></span><span class="palette-name">${escapeHtml(t('style.' + id))}</span></button>`).join('');
+  els.styleOptions.querySelectorAll('[data-style]').forEach(b => b.addEventListener('click', () => changePreferences({ appStyle: b.dataset.style })));
   els.paletteOptions.innerHTML = PALETTES.map(p => `
     <button class="palette-option ${preferences.palette === p.id ? 'active' : ''}" type="button" data-palette="${p.id}" title="${escapeAttr(p.name[preferences.language])}">
       <span class="palette-swatch" style="background:linear-gradient(90deg,${p.colors[0]},${p.colors[1]})"></span>
@@ -200,10 +215,9 @@ async function changePreferences(patch) {
   try { await saveCloudPreferences(); }
   catch (error) { els.settingsSaveStatus.textContent = t('settings.localOnly'); console.warn('No se pudieron guardar preferencias en Supabase:', error.message); }
 }
-async function saveCloudPreferences() {
+async function saveCloudPreferences() {   // merge atómico en el servidor: nunca reemplaza todo settings ni pisa decisiones de otro dispositivo
   if (!user) return;
-  const displayName = user.user_metadata?.display_name || user.email?.split('@')[0] || 'Usuario';
-  const { error } = await supabaseClient.from('profiles').upsert({ id:user.id, display_name:displayName, settings:preferences }, { onConflict:'id' });
+  const { error } = await supabaseClient.rpc('noti_merge_settings', { p_patch: normalizePreferences(preferences), p_legacy: {} });
   if (error) throw error;
   preferencesLoadedFromCloud = true;
 }
@@ -213,6 +227,7 @@ async function loadPreferencesFromCloud() {
   if (error) { if (/settings|column|schema/i.test(error.message || '')) return; throw error; }
   if (data?.settings && Object.keys(data.settings).length) { preferences = normalizePreferences(data.settings); preferencesLoadedFromCloud = true; }
   if (data?.display_name) user.display_name = data.display_name;
+  state.legacyImport = C.mergeLegacy(data?.settings?.legacyImport, state.legacyImport);
 }
 function openSettings() { els.settingsModal.classList.remove('hidden'); els.settingsSaveStatus.textContent = ''; renderSettingsControls(); }
 function closeSettings() { els.settingsModal.classList.add('hidden'); }
@@ -251,7 +266,7 @@ function loadLocalState() {
   const saved = readJSON(userKey());
   if (saved) {
     s.notes = saved.notes || {}; s.drawingIndex = saved.drawingIndex || {};
-    s.items = saved.items || []; s.exceptions = saved.exceptions || []; s.queue = saved.queue || [];
+    s.items = saved.items || []; s.exceptions = saved.exceptions || []; s.queue = saved.queue || []; s.legacyImport = saved.legacyImport || {};
   }
   // Datos de Noti 3.0 (por día de la semana) para el aviso de importación
   const l2 = readJSON(legacyKey()) || readJSON('noti-v1');
@@ -267,8 +282,8 @@ function loadLocalState() {
 function saveLocal() {
   if (!user) return;
   const prev = readJSON(userKey()) || {};
-  const { notes, drawingIndex, items, exceptions, queue } = state;
-  try { localStorage.setItem(userKey(), JSON.stringify({ ...prev, notes, drawingIndex, items, exceptions, queue, preferences })); }
+  const { notes, drawingIndex, items, exceptions, queue, legacyImport } = state;
+  try { localStorage.setItem(userKey(), JSON.stringify({ ...prev, notes, drawingIndex, items, exceptions, queue, legacyImport, preferences })); }
   catch (e) { console.warn('No se pudo guardar localmente:', e.message); }
 }
 function getLocalDrawing(date) {
@@ -290,37 +305,68 @@ function setAuthMode(mode, keepMessage = false) {
   els.loginTab.classList.toggle('active', !signup);
   els.signupTab.classList.toggle('active', signup);
   els.nameField.classList.toggle('hidden', !signup);
+  els.usernameField.classList.toggle('hidden', !signup); els.authUsername.required = signup;
   els.authName.required = signup;
   els.authSubmit.textContent = signup ? t('auth.submitSignup') : t('auth.submitLogin');
   els.authPassword.autocomplete = signup ? 'new-password' : 'current-password';
   if (!keepMessage) showAuthMessage('');
 }
 
+const USERNAME_RE = /^[A-Za-z0-9_.-]{3,20}$/;
+const authErr = key => Object.assign(new Error(t(key)), { noti: true });
+async function emailPorUsuario(username) {
+  const { data, error } = await supabaseClient.rpc('email_por_usuario', { p_username: username });
+  if (error) throw authErr('auth.network');     // error de comunicación ≠ usuario inexistente
+  return data || null;
+}
+async function iniciarSesion(entrada, password) {
+  entrada = (entrada || '').trim();
+  if (!entrada || !password) throw authErr('auth.empty');
+  const viaUsername = !entrada.includes('@');
+  const email = viaUsername ? await emailPorUsuario(entrada) : entrada;
+  if (!email) throw authErr('auth.userNotFound');
+  const { data, error } = await supabaseClient.auth.signInWithPassword({ email, password });
+  if (error) { if (viaUsername && /invalid login credentials/i.test(error.message || '')) throw authErr('auth.wrongPassword'); throw error; }  // por correo no se afirma cuál falló
+  return data.user;
+}
+async function registrar(email, password, name, username) {
+  if (!email.includes('@')) throw authErr('auth.emailNeeded');
+  if (!USERNAME_RE.test(username)) throw authErr('auth.usernameInvalid');
+  if (await emailPorUsuario(username)) throw authErr('auth.usernameTaken');   // solo UX; la unicidad real la impone el índice único + trigger
+  const { data, error } = await supabaseClient.auth.signUp({ email, password, options: { data: { display_name: name || username, username } } });
+  if (error) throw error;
+  return data;
+}
 async function handleAuthSubmit(event) {
   event.preventDefault();
-  const email = els.authEmail.value.trim(), password = els.authPassword.value, name = els.authName.value.trim();
+  if (els.authSubmit.disabled) return;
+  const email = els.authEmail.value.trim(), password = els.authPassword.value, name = els.authName.value.trim(), username = els.authUsername.value.trim();
   els.authSubmit.disabled = true;
   showAuthMessage(authMode === 'signup' ? t('auth.creating') : t('auth.signingIn'));
   try {
     if (authMode === 'signup') {
-      const { data, error } = await supabaseClient.auth.signUp({ email, password, options: { data: { display_name: name } } });
-      if (error) throw error;
+      const data = await registrar(email, password, name, username);
       if (data.session) await bootstrapUser(data.user); else showAuthMessage(t('auth.created'), 'success');
-    } else {
-      const { data, error } = await supabaseClient.auth.signInWithPassword({ email, password });
-      if (error) throw error;
-      await bootstrapUser(data.user);
-    }
+    } else await bootstrapUser(await iniciarSesion(email, password));
   } catch (error) { showAuthMessage(humanAuthError(error), 'error'); }
   finally { els.authSubmit.disabled = false; }
 }
 function humanAuthError(error) {
   const msg = error?.message || t('auth.generic');
+  if (error?.noti) return msg;
   if (/invalid login credentials/i.test(msg)) return t('auth.invalid');
   if (/email not confirmed/i.test(msg)) return t('auth.unconfirmed');
+  if (/rate limit/i.test(msg)) return t('auth.rateLimit');
   if (/user already registered/i.test(msg)) return t('auth.registered');
+  if (/profiles_username|username|database error saving new user/i.test(msg)) return t('auth.usernameTaken');
   if (/password/i.test(msg) && /6/i.test(msg)) return t('auth.password6');
   return msg;
+}
+async function renderWelcome() {   // prioridad: profiles.username → metadata.username → display_name → parte local del correo
+  if (!user) return;
+  if (user.username === undefined) { user.username = null; try { const { data } = await supabaseClient.from('profiles').select('username').eq('id', user.id).maybeSingle(); user.username = data?.username || null; } catch {} }
+  const raw = user.username || user.user_metadata?.username || user.user_metadata?.display_name || user.display_name || user.email?.split('@')[0] || 'Usuario';
+  els.welcomeLine.textContent = t('welcome', { name: raw.charAt(0).toUpperCase() + raw.slice(1) });
 }
 
 function showToastFn(message) {
@@ -366,7 +412,7 @@ async function bootstrapUser(authUser) {
   els.authScreen.classList.add('hidden');
   els.appScreen.classList.remove('hidden');
   const displayName = authUser.user_metadata?.display_name || authUser.email?.split('@')[0] || 'Usuario';
-  els.welcomeLine.textContent = displayName;
+  els.welcomeLine.textContent = displayName; user.username = undefined;
   setSyncStatus(t('sync.connecting'), 'loading');
 
   state = loadLocalState();           // primero lo local: la app es usable aunque no haya red
@@ -376,7 +422,7 @@ async function bootstrapUser(authUser) {
 
   await ensureProfile(displayName);
   await loadPreferencesFromCloud().catch(e => console.warn('No se pudieron cargar preferencias:', e.message));
-  applyPreferences();
+  applyPreferences(); renderWelcome();
   if (!preferencesLoadedFromCloud) {
     saveLocalPreferences();
     await saveCloudPreferences().catch(e => console.warn('No se pudieron inicializar preferencias en Supabase:', e.message));
@@ -477,7 +523,10 @@ async function runOp(op) {
   const db = supabaseClient;
   const now = new Date().toISOString();
   let res;
-  if (op.type === 'note') {
+  if (op.type === 'legacy') {   // va DESPUÉS de la op de nota/dibujo en la cola: solo se envía si el contenido ya se guardó en el destino
+    const e = state.legacyImport[op.id]; if (!e) return;
+    res = await db.rpc('noti_merge_settings', { p_patch: {}, p_legacy: { [op.id]: e } });
+  } else if (op.type === 'note') {
     const n = state.notes[op.date]; if (!n) return;
     res = await db.from('notes_by_date').upsert({ user_id:user.id, note_date:op.date, content:n.content, font_family:n.font || 'system', updated_at:now }, { onConflict:'user_id,note_date' });
   } else if (op.type === 'drawing') {
@@ -603,12 +652,17 @@ function renderCalendar() {
     const info = [note && t('cal.legendNote'), draw && t('cal.legendDraw'), sched && t('cal.legendSched')].filter(Boolean).join(', ');
     b.setAttribute('aria-label', fmtFull(cell.iso) + (info ? ` — ${info}` : ''));
     b.innerHTML = `<span class="num">${cell.day}</span><span class="dots" aria-hidden="true">${note ? '<i class="dot dot-note"></i>' : ''}${draw ? '<i class="dot dot-draw"></i>' : ''}${sched ? '<i class="dot dot-sched"></i>' : ''}</span>`;
-    b.addEventListener('click', () => openWorkspace(cell.iso, b));
+    b.addEventListener('click', () => onCellClick(cell.iso, b));
     cells.push(b);
   });
   els.calGrid.replaceChildren(...cells);
 }
 
+function onCellClick(iso, el) {   // primer toque selecciona; segundo sobre la misma fecha abre (ratón, táctil y teclado Enter/Espacio)
+  if (iso === state.selectedDate) { openWorkspace(iso, el); return; }
+  state.selectedDate = iso; setViewToDate(iso); renderCalendar(); renderAgenda();
+  els.calGrid.querySelector(`[data-iso="${iso}"]`)?.focus({ preventScroll:true });
+}
 function shiftMonth(n) {
   const m = C.addMonths(state.viewYear, state.viewMonth, n);
   state.viewYear = m.year; state.viewMonth = m.month; state.followToday = false;
@@ -648,7 +702,8 @@ function renderAgenda() {
 function metaOf(o) { return [o.room, o.teacher].filter(Boolean).join(' · '); }
 function renderScheduleList(listEl, countEl, iso) {
   const rows = occurrencesFor(iso);
-  countEl.textContent = `${rows.length} ${rows.length === 1 ? t('schedule.block') : t('schedule.blocks')}`;
+  const nxt = rows.find(r => r.start_time);   // en vez de contar bloques: la próxima clase del día
+  countEl.textContent = nxt ? `${t('schedule.next')}: ${nxt.start_time} · ${nxt.subject}` : ''; countEl.classList.toggle('hidden', !nxt);
   if (!rows.length) { listEl.innerHTML = `<div class="empty-state">${t('schedule.empty')}</div>`; return; }
   listEl.innerHTML = rows.map((o, i) => `
     <div class="schedule-row">
@@ -817,7 +872,7 @@ function openWorkspace(iso, originEl) {
   if (wsOpen) return;
   setViewToDate(iso); state.selectedDate = iso;
   renderCalendar(); renderAgenda();
-  setOrigin(originEl || els.calGrid.querySelector('.selected') || els.openDayBtn);
+  setOrigin(originEl || els.calGrid.querySelector('.selected') || els.calGrid);
   wsOpen = true;
   els.workspace.inert = false; els.workspace.setAttribute('aria-hidden', 'false');
   document.body.classList.add('ws-open');
@@ -899,7 +954,7 @@ function toggleCenter() { els.workspace.classList.toggle('centered'); renderCent
 let noteTimer = null;
 function setStat(el, kind) {
   el.textContent = kind === 'saving' ? t('sync.saving') : kind === 'pending' ? t('sync.pending') : t('sync.synced');
-  el.classList.toggle('ok', kind === 'saved');
+  el.classList.toggle('ok', kind === 'saved'); el.classList.toggle('busy', kind === 'saving');
 }
 function refreshStatuses() {
   if (!currentDate) return;
@@ -998,19 +1053,26 @@ function insertChecklist() {
 function renderLegacyBanner() {
   if (!currentDate) return;
   const id = dayIdOf(currentDate), box = els.legacyBanner, parts = [];
-  const lNote = state.legacy.notes[id], lDraw = state.legacy.drawings[id];
+  const lNote = state.legacy.notes[id], lDraw = state.legacy.drawings[id], skip = k => `<button class="tool-btn" data-skip="${k}" type="button">${t('legacy.skip')}</button>`;
   const noteHere = noteHasContent(state.notes[currentDate]?.content) || noteHasContent(els.noteEditor.innerHTML);
-  if (noteHasContent(lNote) && !noteHere) parts.push(`<span>${escapeHtml(t('legacy.note', { day: dayName(id).toLowerCase() }))}</span><button class="tool-btn" data-import="note" type="button">${t('legacy.importNote')}</button>`);
-  if (lDraw && !state.drawingIndex[currentDate] && !drawing.hasInk) parts.push(`<span>${escapeHtml(t('legacy.drawing', { day: dayName(id).toLowerCase() }))}</span><button class="tool-btn" data-import="drawing" type="button">${t('legacy.importDrawing')}</button>`);
+  if (noteHasContent(lNote) && !noteHere && C.legacyPending(state.legacyImport, 'note', id)) parts.push(`<span>${escapeHtml(t('legacy.note', { day: dayName(id).toLowerCase() }))}</span><button class="tool-btn" data-import="note" type="button">${t('legacy.importNote')}</button>${skip('note')}`);
+  if (lDraw && !state.drawingIndex[currentDate] && !drawing.hasInk && C.legacyPending(state.legacyImport, 'drawing', id)) parts.push(`<span>${escapeHtml(t('legacy.drawing', { day: dayName(id).toLowerCase() }))}</span><button class="tool-btn" data-import="drawing" type="button">${t('legacy.importDrawing')}</button>${skip('drawing')}`);
   box.classList.toggle('hidden', !parts.length);
   box.innerHTML = parts.join('');
-  box.querySelectorAll('[data-import]').forEach(b => b.addEventListener('click', () => b.dataset.import === 'note' ? importLegacyNote() : importLegacyDrawing()));
+  box.querySelectorAll('[data-import]').forEach(b => b.addEventListener('click', () => { b.disabled = true; b.dataset.import === 'note' ? importLegacyNote() : importLegacyDrawing(); }));
+  box.querySelectorAll('[data-skip]').forEach(b => b.addEventListener('click', () => { markLegacy(b.dataset.skip, 'skipped'); renderLegacyBanner(); }));
+}
+function markLegacy(kind, status) {   // 'imported' | 'skipped' — se guarda en profiles.settings.legacyImport vía cola (reintenta sin duplicar)
+  const id = dayIdOf(currentDate), next = C.legacyMark(state.legacyImport, kind, id, status, currentDate);
+  if (next === state.legacyImport) return;
+  state.legacyImport = next; saveLocal();
+  enqueue({ key: 'legacy:' + C.legacyId(kind, id), type: 'legacy', id: C.legacyId(kind, id) });
 }
 function importLegacyNote() {
   const id = dayIdOf(currentDate), font = state.legacy.fonts[id] || 'system';
   els.noteEditor.innerHTML = state.legacy.notes[id] || '';
   els.fontSelect.value = font; applyFont(font);
-  commitNoteNow(); renderLegacyBanner(); showToastFn(t('legacy.imported'));
+  commitNoteNow(); markLegacy('note', 'imported'); renderLegacyBanner(); showToastFn(t('legacy.imported'));
 }
 async function importLegacyDrawing() {
   const src = state.legacy.drawings[dayIdOf(currentDate)]; if (!src) return;
@@ -1024,7 +1086,7 @@ async function importLegacyDrawing() {
   tc.putImageData(id, 0, 0);
   const ctx = els.canvas.getContext('2d');
   ctx.clearRect(0, 0, CANVAS_W, CANVAS_H); ctx.drawImage(tmp, 0, 0);
-  drawing.hasInk = true; drawing.dirty = true; saveDrawingNow(); renderLegacyBanner(); showToastFn(t('legacy.imported'));
+  drawing.hasInk = true; drawing.dirty = true; saveDrawingNow(); markLegacy('drawing', 'imported'); renderLegacyBanner(); showToastFn(t('legacy.imported'));
 }
 const loadImage = src => new Promise((res, rej) => { const i = new Image(); i.onload = () => res(i); i.onerror = rej; i.src = src; });
 
@@ -1138,12 +1200,12 @@ els.settingsModal.addEventListener('click', ev => { if (ev.target.dataset.closeS
 els.languageSelect.addEventListener('change', () => changePreferences({ language: els.languageSelect.value }));
 els.lightModeBtn.addEventListener('click', () => changePreferences({ theme:'light' }));
 els.darkModeBtn.addEventListener('click', () => changePreferences({ theme:'dark' }));
+els.grayModeBtn.addEventListener('click', () => changePreferences({ theme:'gray' }));
 
 // Calendario
 els.calPrev.addEventListener('click', () => shiftMonth(-1));
 els.calNext.addEventListener('click', () => shiftMonth(1));
 els.calToday.addEventListener('click', goToday);
-els.openDayBtn.addEventListener('click', () => openWorkspace(state.selectedDate, els.calGrid.querySelector('.selected') || els.openDayBtn));
 els.editScheduleBtn.addEventListener('click', () => openScheduleModal());
 
 // Espacio diario

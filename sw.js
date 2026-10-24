@@ -1,5 +1,5 @@
-// Noti 0.4.0 — el nombre del caché cambia en cada versión; al activarse borra los anteriores (noti-v2, noti-v3, noti-v3-2…).
-const VERSION = '0.4.0';
+// Noti 0.5.0 — el nombre del caché cambia en cada versión; al activarse borra los anteriores (noti-v2, noti-v3, noti-v3-2…).
+const VERSION = '0.5.0';
 const CACHE = `noti-${VERSION}`;
 const ASSETS = ['./', './index.html', './styles.css', './noti-core.js', './app.js', './manifest.webmanifest', './icons/icon.svg', './icons/icon-192.png', './icons/icon-512.png'];
 

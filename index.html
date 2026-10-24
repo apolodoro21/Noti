@@ -7,11 +7,11 @@
   <meta name="description" content="Noti: horarios, notas, pendientes y dibujo sincronizados entre tus dispositivos.">
   <link rel="manifest" href="manifest.webmanifest">
   <link rel="icon" href="icons/icon.svg" type="image/svg+xml">
-  <link rel="stylesheet" href="styles.css?v=0.4.0">
+  <link rel="stylesheet" href="styles.css?v=0.5.0">
   <title>Noti</title>
 </head>
 <body>
-  <div id="versionBadge" class="version-badge" aria-label="Versión de Noti">v0.4.0</div>
+  <div id="versionBadge" class="version-badge" aria-label="Versión de Noti">v0.5.0</div>
 
   <div id="authScreen" class="auth-screen">
     <div class="auth-card card">
@@ -32,9 +32,13 @@
           <span data-i18n="auth.name">Nombre</span>
           <input id="authName" type="text" autocomplete="name" placeholder="Tu nombre" data-i18n-placeholder="auth.namePlaceholder">
         </label>
+        <label id="usernameField" class="field hidden">
+          <span data-i18n="auth.username">Nombre de usuario</span>
+          <input id="authUsername" type="text" autocomplete="off" autocapitalize="none" spellcheck="false" maxlength="20" placeholder="usuario" data-i18n-placeholder="auth.usernamePlaceholder">
+        </label>
         <label class="field">
-          <span data-i18n="auth.email">Correo electrónico</span>
-          <input id="authEmail" type="email" autocomplete="email" placeholder="tucorreo@email.com" data-i18n-placeholder="auth.emailPlaceholder" required>
+          <span data-i18n="auth.email">Correo o usuario</span>
+          <input id="authEmail" type="text" autocomplete="username" autocapitalize="none" spellcheck="false" placeholder="Usuario o tucorreo@email.com" data-i18n-placeholder="auth.emailPlaceholder" required>
         </label>
         <label class="field">
           <span data-i18n="auth.password">Contraseña</span>
@@ -97,7 +101,6 @@
           <p id="daySubtitle"></p>
         </div>
         <div class="agenda-actions">
-          <button id="openDayBtn" class="primary-btn" type="button" data-i18n="ws.open">Abrir día</button>
           <button id="editScheduleBtn" class="secondary-btn" type="button" data-i18n="schedule.add">+ Actividad</button>
         </div>
       </section>
@@ -269,12 +272,18 @@
         <div class="segmented-control">
           <button id="lightModeBtn" class="secondary-btn" type="button" data-theme-choice="light" data-i18n="settings.light">Claro</button>
           <button id="darkModeBtn" class="secondary-btn" type="button" data-theme-choice="dark" data-i18n="settings.dark">Oscuro</button>
+          <button id="grayModeBtn" class="secondary-btn" type="button" data-theme-choice="gray" data-i18n="settings.gray">Gris tenue</button>
         </div>
       </div>
 
       <div class="settings-group">
         <span class="settings-label" data-i18n="settings.palette">Paleta de colores</span>
         <div id="paletteOptions" class="palette-grid"></div>
+      </div>
+
+      <div class="settings-group">
+        <span class="settings-label" data-i18n="settings.style">Temas de App</span>
+        <div id="styleOptions" class="style-grid"></div>
       </div>
 
       <p id="settingsSaveStatus" class="settings-save-status"></p>
@@ -287,7 +296,7 @@
   <div id="toast" class="toast" role="status" aria-live="polite"></div>
 
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-  <script src="noti-core.js?v=0.4.0"></script>
-  <script src="app.js?v=0.4.0"></script>
+  <script src="noti-core.js?v=0.5.0"></script>
+  <script src="app.js?v=0.5.0"></script>
 </body>
 </html>
